@@ -3,18 +3,18 @@ from __future__ import annotations
 import uuid
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-from django.contrib.postgres.fields import CIEmailField
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
-from django.utils import timezone
+from django.db.models.functions import Lower
+from django.utils import timezone as django_timezone
 
 from .managers import UserManager
 
 
 class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    email = CIEmailField(unique=True)
+    email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
     display_name = models.CharField(max_length=150, blank=True)
@@ -26,7 +26,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     onboarding_completed_at = models.DateTimeField(null=True, blank=True)
     failed_login_attempts = models.PositiveIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
-    password_updated_at = models.DateTimeField(default=timezone.now)
+    password_updated_at = models.DateTimeField(default=django_timezone.now)
     last_login = models.DateTimeField(null=True, blank=True, db_column="last_login_at")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -48,6 +48,10 @@ class User(AbstractBaseUser, PermissionsMixin):
             models.CheckConstraint(
                 check=Q(failed_login_attempts__gte=0),
                 name="users_failed_login_attempts_gte_0",
+            ),
+            models.UniqueConstraint(
+                Lower("email"),
+                name="users_email_ci_unique",
             ),
         ]
 

@@ -1,0 +1,7 @@
+export { LoginPage, default as loginPage } from './LoginPage'
+export { DashboardPage, default as dashboardPage } from './DashboardPage'
+export { ZonesPage, default as zonesPage } from './ZonesPage'
+export { CodesPage, default as codesPage } from './CodesPage'
+export { EventsPage, default as eventsPage } from './EventsPage'
+export { SettingsPage, default as settingsPage } from './SettingsPage'
+export { NotFoundPage, default as notFoundPage } from './NotFoundPage'

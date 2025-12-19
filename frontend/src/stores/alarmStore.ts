@@ -1,0 +1,237 @@
+import { create } from 'zustand'
+import type {
+  AlarmStateSnapshot,
+  AlarmSettingsProfile,
+  Zone,
+  AlarmEvent,
+  WebSocketStatus,
+  CountdownPayload,
+} from '@/types'
+import type { AlarmStateType } from '@/lib/constants'
+import { alarmService, zonesService, wsManager } from '@/services'
+
+interface AlarmStore {
+  // State
+  alarmState: AlarmStateSnapshot | null
+  settings: AlarmSettingsProfile | null
+  zones: Zone[]
+  recentEvents: AlarmEvent[]
+  wsStatus: WebSocketStatus
+  countdown: CountdownPayload | null
+  isLoading: boolean
+  error: string | null
+
+  // Computed
+  effectiveSettings: {
+    delayTime: number
+    armingTime: number
+    triggerTime: number
+  } | null
+
+  // Actions
+  fetchAlarmState: () => Promise<void>
+  fetchSettings: () => Promise<void>
+  fetchZones: () => Promise<void>
+  fetchRecentEvents: () => Promise<void>
+  arm: (targetState: AlarmStateType, code?: string) => Promise<void>
+  disarm: (code: string) => Promise<void>
+  cancelArming: (code?: string) => Promise<void>
+  bypassZone: (zoneId: number, until?: string) => Promise<void>
+  unbypassZone: (zoneId: number) => Promise<void>
+
+  // WebSocket
+  connectWebSocket: () => void
+  disconnectWebSocket: () => void
+  setWsStatus: (status: WebSocketStatus) => void
+
+  // Internal updates from WebSocket
+  updateAlarmState: (state: AlarmStateSnapshot) => void
+  updateZone: (zone: Zone) => void
+  addEvent: (event: AlarmEvent) => void
+  setCountdown: (countdown: CountdownPayload | null) => void
+
+  clearError: () => void
+}
+
+export const useAlarmStore = create<AlarmStore>((set, get) => ({
+  alarmState: null,
+  settings: null,
+  zones: [],
+  recentEvents: [],
+  wsStatus: 'disconnected',
+  countdown: null,
+  isLoading: false,
+  error: null,
+  effectiveSettings: null,
+
+  fetchAlarmState: async () => {
+    set({ isLoading: true, error: null })
+    try {
+      const alarmState = await alarmService.getState()
+      set({ alarmState, isLoading: false })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch alarm state',
+      })
+    }
+  },
+
+  fetchSettings: async () => {
+    try {
+      const settings = await alarmService.getSettings()
+      set({ settings })
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to fetch settings',
+      })
+    }
+  },
+
+  fetchZones: async () => {
+    try {
+      const zones = await zonesService.getZones()
+      set({ zones })
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to fetch zones',
+      })
+    }
+  },
+
+  fetchRecentEvents: async () => {
+    try {
+      const recentEvents = await alarmService.getRecentEvents(10)
+      set({ recentEvents })
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to fetch events',
+      })
+    }
+  },
+
+  arm: async (targetState: AlarmStateType, code?: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      const alarmState = await alarmService.arm({ targetState, code })
+      set({ alarmState, isLoading: false })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to arm',
+      })
+      throw error
+    }
+  },
+
+  disarm: async (code: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      const alarmState = await alarmService.disarm({ code })
+      set({ alarmState, isLoading: false, countdown: null })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to disarm',
+      })
+      throw error
+    }
+  },
+
+  cancelArming: async (code?: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      const alarmState = await alarmService.cancelArming(code)
+      set({ alarmState, isLoading: false, countdown: null })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to cancel arming',
+      })
+      throw error
+    }
+  },
+
+  bypassZone: async (zoneId: number, until?: string) => {
+    try {
+      const zone = await zonesService.bypassZone(zoneId, until)
+      const zones = get().zones.map((z) => (z.id === zoneId ? zone : z))
+      set({ zones })
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to bypass zone',
+      })
+      throw error
+    }
+  },
+
+  unbypassZone: async (zoneId: number) => {
+    try {
+      const zone = await zonesService.unbypassZone(zoneId)
+      const zones = get().zones.map((z) => (z.id === zoneId ? zone : z))
+      set({ zones })
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to unbypass zone',
+      })
+      throw error
+    }
+  },
+
+  connectWebSocket: () => {
+    wsManager.connect()
+
+    wsManager.onStatusChange((status) => {
+      set({ wsStatus: status })
+    })
+
+    wsManager.onMessage((message) => {
+      switch (message.type) {
+        case 'alarm_state':
+          get().updateAlarmState((message.payload as { state: AlarmStateSnapshot }).state)
+          break
+        case 'event':
+          get().addEvent((message.payload as { event: AlarmEvent }).event)
+          break
+        case 'zone_update':
+          get().updateZone((message.payload as { zone: Zone }).zone)
+          break
+        case 'countdown':
+          get().setCountdown(message.payload as CountdownPayload)
+          break
+      }
+    })
+  },
+
+  disconnectWebSocket: () => {
+    wsManager.disconnect()
+  },
+
+  setWsStatus: (status: WebSocketStatus) => {
+    set({ wsStatus: status })
+  },
+
+  updateAlarmState: (state: AlarmStateSnapshot) => {
+    set({ alarmState: state })
+  },
+
+  updateZone: (zone: Zone) => {
+    const zones = get().zones.map((z) => (z.id === zone.id ? zone : z))
+    set({ zones })
+  },
+
+  addEvent: (event: AlarmEvent) => {
+    const recentEvents = [event, ...get().recentEvents.slice(0, 9)]
+    set({ recentEvents })
+  },
+
+  setCountdown: (countdown: CountdownPayload | null) => {
+    set({ countdown })
+  },
+
+  clearError: () => {
+    set({ error: null })
+  },
+}))
+
+export default useAlarmStore
