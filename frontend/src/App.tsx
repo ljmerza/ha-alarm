@@ -8,6 +8,7 @@ import {
   LoginPage,
   OnboardingPage,
   SetupWizardPage,
+  ImportSensorsPage,
   DashboardPage,
   ZonesPage,
   CodesPage,
@@ -103,6 +104,7 @@ function AppContent() {
         }
       >
         <Route path={AppRoutes.SETUP} element={<SetupWizardPage />} />
+        <Route path={AppRoutes.SETUP_IMPORT_SENSORS} element={<ImportSensorsPage />} />
         <Route path={AppRoutes.HOME} element={<DashboardPage />} />
         <Route path={AppRoutes.ZONES} element={<ZonesPage />} />
         <Route path={AppRoutes.CODES} element={<CodesPage />} />

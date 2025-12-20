@@ -41,7 +41,13 @@ export const zonesService = {
     return api.get<Sensor>(`/api/alarm/sensors/${id}/`)
   },
 
-  async createSensor(sensor: Omit<Sensor, 'id' | 'currentState' | 'lastTriggered'>): Promise<Sensor> {
+  async createSensor(sensor: {
+    name: string
+    zoneId?: number
+    entityId: string | null
+    isActive: boolean
+    isEntryPoint: boolean
+  }): Promise<Sensor> {
     return api.post<Sensor>('/api/alarm/sensors/', sensor)
   },
 

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { MapPin, TriangleAlert } from 'lucide-react'
+import { Download, MapPin, TriangleAlert } from 'lucide-react'
 import { Routes as AppRoutes } from '@/lib/constants'
 import { useAlarmStore } from '@/stores'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,12 +50,20 @@ export function ZoneSummaryCard() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base">Zones</CardTitle>
-          <Button asChild size="sm" variant="outline">
-            <Link to={AppRoutes.ZONES}>
-              <MapPin />
-              View
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to={AppRoutes.SETUP_IMPORT_SENSORS}>
+                <Download />
+                Import
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to={AppRoutes.ZONES}>
+                <MapPin />
+                View
+              </Link>
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

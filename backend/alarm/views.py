@@ -78,7 +78,14 @@ class SensorsView(APIView):
         return Response(SensorSerializer(sensors, many=True).data)
 
     def post(self, request):
-        data = dict(request.data)
+        if hasattr(request.data, "copy"):
+            data = request.data.copy()
+        else:
+            data = dict(request.data)
+
+        if not data.get("zone") and data.get("zone_id"):
+            data["zone"] = data.get("zone_id")
+
         if not data.get("zone"):
             zone, _ = Zone.objects.get_or_create(name="Unassigned", defaults={"is_active": True})
             data["zone"] = zone.id
