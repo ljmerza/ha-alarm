@@ -44,7 +44,7 @@ class AlarmSettingsProfileSerializer(serializers.ModelSerializer):
 
 
 class SensorSerializer(serializers.ModelSerializer):
-    zone_id = serializers.IntegerField(source="zone_id", read_only=True)
+    zone_id = serializers.IntegerField(read_only=True)
     entity_id = serializers.CharField(allow_blank=True, required=False)
     current_state = serializers.SerializerMethodField()
     last_triggered = serializers.SerializerMethodField()

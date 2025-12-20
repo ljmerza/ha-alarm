@@ -54,7 +54,7 @@ export function ZoneSummaryCard() {
             <Button asChild size="sm" variant="outline">
               <Link to={AppRoutes.SETUP_IMPORT_SENSORS}>
                 <Download />
-                Import
+                Manage Sensors
               </Link>
             </Button>
             <Button asChild size="sm" variant="outline">

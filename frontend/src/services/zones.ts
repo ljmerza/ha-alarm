@@ -11,7 +11,12 @@ export const zonesService = {
     return api.get<Zone>(`/api/alarm/zones/${id}/`)
   },
 
-  async createZone(zone: Omit<Zone, 'id' | 'sensors' | 'isBypassed' | 'bypassedUntil'>): Promise<Zone> {
+  async createZone(zone: {
+    name: string
+    isActive?: boolean
+    entryDelayOverride?: number | null
+    activeStates?: Zone['activeStates']
+  }): Promise<Zone> {
     return api.post<Zone>('/api/alarm/zones/', zone)
   },
 

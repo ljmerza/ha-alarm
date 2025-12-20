@@ -23,7 +23,8 @@ export function ImportSensorsPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [nameOverrides, setNameOverrides] = useState<Record<string, string>>({})
   const [entryOverrides, setEntryOverrides] = useState<Record<string, boolean>>({})
-  const [zoneId, setZoneId] = useState<number | 'unassigned'>('unassigned')
+  const [zoneId, setZoneId] = useState<number | 'unassigned' | 'new'>('unassigned')
+  const [newZoneName, setNewZoneName] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const existingEntityIds = useMemo(() => {
@@ -89,7 +90,20 @@ export function ImportSensorsPage() {
     setError(null)
     setIsSubmitting(true)
     try {
-      const targetZoneId = zoneId === 'unassigned' ? undefined : zoneId
+      const targetZoneId = await (async () => {
+        if (zoneId === 'unassigned') return undefined
+        if (zoneId !== 'new') return zoneId
+        const trimmed = newZoneName.trim()
+        if (!trimmed) {
+          throw new Error('Zone name is required.')
+        }
+        const created = await zonesService.createZone({
+          name: trimmed,
+          isActive: true,
+          activeStates: [],
+        })
+        return created.id
+      })()
 
       for (const entity of selectedEntities) {
         const name = (nameOverrides[entity.entityId] || entity.name || entity.entityId).trim()
@@ -109,6 +123,10 @@ export function ImportSensorsPage() {
       await fetchZones()
       await fetchAlarmState()
       setSelected({})
+      if (zoneId === 'new') {
+        setZoneId('unassigned')
+        setNewZoneName('')
+      }
     } catch (err) {
       if (err && typeof err === 'object') {
         const anyErr = err as { message?: string; detail?: string }
@@ -161,10 +179,17 @@ export function ImportSensorsPage() {
               className="h-9 rounded-md border border-input bg-background px-3 text-sm"
               value={zoneId}
               onChange={(e) =>
-                setZoneId(e.target.value === 'unassigned' ? 'unassigned' : Number(e.target.value))
+                setZoneId(
+                  e.target.value === 'unassigned'
+                    ? 'unassigned'
+                    : e.target.value === 'new'
+                      ? 'new'
+                      : Number(e.target.value)
+                )
               }
             >
               <option value="unassigned">Unassigned (default)</option>
+              <option value="new">New zone…</option>
               {zones.map((z) => (
                 <option key={z.id} value={z.id}>
                   {z.name}
@@ -174,6 +199,27 @@ export function ImportSensorsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {zoneId === 'new' && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">New Zone</CardTitle>
+            <CardDescription>Create a zone and import selected sensors into it.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="newZoneName">
+              Zone name
+            </label>
+            <Input
+              id="newZoneName"
+              placeholder="Perimeter"
+              value={newZoneName}
+              onChange={(e) => setNewZoneName(e.target.value)}
+              disabled={isSubmitting}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -293,4 +339,3 @@ export function ImportSensorsPage() {
 }
 
 export default ImportSensorsPage
-

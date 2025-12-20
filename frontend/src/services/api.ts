@@ -54,8 +54,22 @@ class ApiClient {
           const asRecord = parsed as Record<string, unknown>
           const detail = typeof asRecord.detail === 'string' ? asRecord.detail : undefined
           const message = typeof asRecord.message === 'string' ? asRecord.message : detail
+          const fieldMessage = (() => {
+            if (message) return undefined
+            const nonField = asRecord.non_field_errors
+            if (Array.isArray(nonField) && typeof nonField[0] === 'string') {
+              return nonField[0]
+            }
+            for (const [key, value] of Object.entries(asRecord)) {
+              if (key === 'detail' || key === 'message') continue
+              if (Array.isArray(value) && typeof value[0] === 'string') {
+                return `${key}: ${value[0]}`
+              }
+            }
+            return undefined
+          })()
           return {
-            message: message || response.statusText || 'An error occurred',
+            message: message || fieldMessage || response.statusText || 'An error occurred',
             code: typeof asRecord.code === 'string' ? asRecord.code : response.status.toString(),
             details:
               isPlainObject(asRecord.details) ? (asRecord.details as Record<string, string[]>) : undefined,
