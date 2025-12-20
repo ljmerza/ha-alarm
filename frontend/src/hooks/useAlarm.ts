@@ -83,12 +83,16 @@ export function useAlarm() {
     AlarmState.ARMED_VACATION,
   ]
 
-  // Check for open sensors that might prevent arming
-  const openSensors = sensors.filter((sensor) => sensor.currentState === 'open' && sensor.isActive)
+  const isUsedInRules = (sensor: (typeof sensors)[number]) => sensor.usedInRules !== false
+
+  // Check for open sensors that might prevent arming (only entities in enabled rules)
+  const openSensors = sensors.filter(
+    (sensor) => isUsedInRules(sensor) && sensor.currentState === 'open' && sensor.isActive
+  )
 
   // "Down/unavailable" sensors: configured but status can't be read
   const unknownSensors = sensors.filter(
-    (sensor) => sensor.isActive && sensor.entityId && sensor.currentState === 'unknown'
+    (sensor) => isUsedInRules(sensor) && sensor.isActive && sensor.entityId && sensor.currentState === 'unknown'
   )
 
   const canArm = openSensors.length === 0 || settings?.sensorBehavior?.forceArmEnabled

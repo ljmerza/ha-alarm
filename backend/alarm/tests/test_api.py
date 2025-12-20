@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+from datetime import timezone as dt_timezone
+
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.auth.hashers import make_password
+from django.test import override_settings
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import User
@@ -86,6 +90,35 @@ class AlarmApiTests(APITestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.data["detail"], "Code is not active yet.")
 
+    def test_temporary_code_day_restriction_is_enforced(self):
+        url = reverse("alarm-disarm")
+        fixed_now = timezone.datetime(2025, 1, 1, 12, 0, 0, tzinfo=dt_timezone.utc)  # Wednesday
+        self.user.timezone = "UTC"
+        self.user.save(update_fields=["timezone"])
+        self.code.code_type = UserCode.CodeType.TEMPORARY
+        self.code.days_of_week = 1 << 5  # Saturday only (Mon=0)
+        self.code.save(update_fields=["code_type", "days_of_week"])
+
+        with patch("alarm.services.timezone.now", return_value=fixed_now):
+            response = self.client.post(url, data={"code": self.code_value})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["detail"], "Code is not valid today.")
+
+    def test_temporary_code_time_window_is_enforced(self):
+        url = reverse("alarm-disarm")
+        fixed_now = timezone.datetime(2025, 1, 1, 7, 0, 0, tzinfo=dt_timezone.utc)
+        self.user.timezone = "UTC"
+        self.user.save(update_fields=["timezone"])
+        self.code.code_type = UserCode.CodeType.TEMPORARY
+        self.code.window_start = timezone.datetime(2025, 1, 1, 8, 0, 0, tzinfo=dt_timezone.utc).time()
+        self.code.window_end = timezone.datetime(2025, 1, 1, 10, 0, 0, tzinfo=dt_timezone.utc).time()
+        self.code.save(update_fields=["code_type", "window_start", "window_end"])
+
+        with patch("alarm.services.timezone.now", return_value=fixed_now):
+            response = self.client.post(url, data={"code": self.code_value})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["detail"], "Code is not valid at this time.")
+
     def test_update_sensor(self):
         sensor = Sensor.objects.create(
             name="Front Door",
@@ -101,6 +134,97 @@ class AlarmApiTests(APITestCase):
 
         sensor.refresh_from_db()
         self.assertEqual(sensor.is_entry_point, False)
+
+    def test_get_sensors_uses_entity_cache_for_current_state(self):
+        Sensor.objects.create(
+            name="Front Door",
+            entity_id="binary_sensor.front_door",
+            is_active=True,
+            is_entry_point=True,
+        )
+        Entity.objects.create(
+            entity_id="binary_sensor.front_door",
+            domain="binary_sensor",
+            name="Front Door",
+            last_state="off",
+        )
+
+        url = reverse("alarm-sensors")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        by_entity_id = {s["entity_id"]: s for s in response.data}
+        self.assertEqual(by_entity_id["binary_sensor.front_door"]["current_state"], "closed")
+
+    def test_get_sensors_includes_used_in_rules_flag(self):
+        Sensor.objects.create(
+            name="Front Door",
+            entity_id="binary_sensor.front_door",
+            is_active=True,
+            is_entry_point=True,
+        )
+        Sensor.objects.create(
+            name="Unused Door",
+            entity_id="binary_sensor.unused",
+            is_active=True,
+            is_entry_point=True,
+        )
+
+        url = reverse("alarm-rules")
+        payload = {
+            "name": "Trigger if door open",
+            "kind": "trigger",
+            "enabled": True,
+            "priority": 10,
+            "schema_version": 1,
+            "definition": {"when": {"op": "entity_state", "entity_id": "binary_sensor.front_door", "equals": "on"}},
+            "entity_ids": ["binary_sensor.front_door"],
+        }
+        response = self.client.post(url, data=payload, format="json")
+        self.assertEqual(response.status_code, 201)
+
+        url = reverse("alarm-sensors")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        by_entity_id = {s["entity_id"]: s for s in response.data}
+        self.assertEqual(by_entity_id["binary_sensor.front_door"]["used_in_rules"], True)
+        self.assertEqual(by_entity_id["binary_sensor.unused"]["used_in_rules"], False)
+
+    @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
+    @patch("alarm.home_assistant._get_client")
+    def test_get_sensors_prefers_home_assistant_live_state(self, mock_get_client):
+        class _State:
+            entity_id = "binary_sensor.front_door"
+            state = "on"
+            attributes = {"friendly_name": "Front Door", "device_class": "door"}
+            last_changed = "2025-01-01T00:00:00Z"
+
+        class _Client:
+            def get_config(self):
+                return {"version": "1.0"}
+
+            def get_states(self):
+                return [_State()]
+
+        mock_get_client.return_value = _Client()
+
+        Sensor.objects.create(
+            name="Front Door",
+            entity_id="binary_sensor.front_door",
+            is_active=True,
+            is_entry_point=True,
+        )
+        Entity.objects.create(
+            entity_id="binary_sensor.front_door",
+            domain="binary_sensor",
+            name="Front Door",
+            last_state="off",
+        )
+
+        url = reverse("alarm-sensors")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        by_entity_id = {s["entity_id"]: s for s in response.data}
+        self.assertEqual(by_entity_id["binary_sensor.front_door"]["current_state"], "open")
 
     def test_rules_crud(self):
         url = reverse("alarm-rules")

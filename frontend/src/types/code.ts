@@ -42,6 +42,9 @@ export interface CreateCodeRequest {
   codeType?: CodeType
   startAt?: string | null
   endAt?: string | null
+  daysOfWeek?: number | null
+  windowStart?: string | null
+  windowEnd?: string | null
   allowedStates?: AlarmStateType[]
   reauthPassword: string
 }
@@ -52,6 +55,9 @@ export interface UpdateCodeRequest {
   isActive?: boolean
   startAt?: string | null
   endAt?: string | null
+  daysOfWeek?: number | null
+  windowStart?: string | null
+  windowEnd?: string | null
   allowedStates?: AlarmStateType[]
   reauthPassword: string
 }

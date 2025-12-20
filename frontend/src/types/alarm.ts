@@ -65,6 +65,7 @@ export interface Sensor {
   isEntryPoint: boolean
   currentState: 'open' | 'closed' | 'unknown'
   lastTriggered: string | null
+  usedInRules?: boolean
 }
 
 // Alarm Event

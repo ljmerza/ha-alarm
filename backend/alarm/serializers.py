@@ -55,6 +55,7 @@ class SensorSerializer(serializers.ModelSerializer):
     entity_id = serializers.CharField(allow_blank=True, required=False)
     current_state = serializers.SerializerMethodField()
     last_triggered = serializers.SerializerMethodField()
+    used_in_rules = serializers.SerializerMethodField()
 
     class Meta:
         model = Sensor
@@ -66,13 +67,45 @@ class SensorSerializer(serializers.ModelSerializer):
             "is_entry_point",
             "current_state",
             "last_triggered",
+            "used_in_rules",
         )
 
+    def _map_entity_state(self, raw_state: str | None) -> str:
+        state = (raw_state or "").strip().lower()
+        if not state or state in {"unknown", "unavailable", "none", "null"}:
+            return "unknown"
+        if state in {"on", "open", "opened", "true", "1"}:
+            return "open"
+        if state in {"off", "closed", "false", "0"}:
+            return "closed"
+        return "unknown"
+
     def get_current_state(self, obj: Sensor) -> str:
+        entity_id = (obj.entity_id or "").strip()
+        if not entity_id:
+            return "unknown"
+        state_map = self.context.get("entity_state_by_entity_id")
+        if isinstance(state_map, dict):
+            return self._map_entity_state(state_map.get(entity_id))
         return "unknown"
 
     def get_last_triggered(self, obj: Sensor):
+        last_triggered_map = self.context.get("last_triggered_by_sensor_id")
+        if isinstance(last_triggered_map, dict):
+            value = last_triggered_map.get(obj.id)
+            return value.isoformat() if value is not None else None
         return None
+
+    def get_used_in_rules(self, obj: Sensor) -> bool:
+        entity_id = (obj.entity_id or "").strip()
+        if not entity_id:
+            return False
+        used_set = self.context.get("used_entity_ids_in_rules")
+        if isinstance(used_set, set):
+            return entity_id in used_set
+        if isinstance(used_set, (list, tuple)):
+            return entity_id in set(used_set)
+        return False
 
 class AlarmEventSerializer(serializers.ModelSerializer):
     user_id = serializers.UUIDField(source="user_id", allow_null=True, read_only=True)

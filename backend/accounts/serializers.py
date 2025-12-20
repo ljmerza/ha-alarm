@@ -131,6 +131,9 @@ class UserCodeCreateSerializer(serializers.Serializer):
     )
     start_at = serializers.DateTimeField(required=False, allow_null=True)
     end_at = serializers.DateTimeField(required=False, allow_null=True)
+    days_of_week = serializers.IntegerField(required=False, allow_null=True)
+    window_start = serializers.TimeField(required=False, allow_null=True)
+    window_end = serializers.TimeField(required=False, allow_null=True)
     allowed_states = serializers.ListField(
         required=False,
         child=serializers.ChoiceField(choices=UserCodeAllowedState.AlarmState.choices),
@@ -149,8 +152,17 @@ class UserCodeCreateSerializer(serializers.Serializer):
         code_type = attrs.get("code_type", UserCode.CodeType.PERMANENT)
         start_at = attrs.get("start_at")
         end_at = attrs.get("end_at")
+        days_of_week = attrs.get("days_of_week")
+        window_start = attrs.get("window_start")
+        window_end = attrs.get("window_end")
 
-        if code_type != UserCode.CodeType.TEMPORARY and (start_at is not None or end_at is not None):
+        if code_type != UserCode.CodeType.TEMPORARY and (
+            start_at is not None
+            or end_at is not None
+            or days_of_week is not None
+            or window_start is not None
+            or window_end is not None
+        ):
             raise serializers.ValidationError(
                 {"code_type": "Only temporary codes can set an active time range."}
             )
@@ -158,6 +170,24 @@ class UserCodeCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"end_at": "end_at must be after or equal to start_at."}
             )
+        if code_type == UserCode.CodeType.TEMPORARY:
+            if days_of_week is not None:
+                if days_of_week < 0 or days_of_week > 127:
+                    raise serializers.ValidationError(
+                        {"days_of_week": "days_of_week must be between 0 and 127."}
+                    )
+                if days_of_week == 0:
+                    raise serializers.ValidationError(
+                        {"days_of_week": "Select at least one day."}
+                    )
+            if (window_start is None) != (window_end is None):
+                raise serializers.ValidationError(
+                    {"window_start": "window_start and window_end must be set together."}
+                )
+            if window_start is not None and window_end is not None and window_start >= window_end:
+                raise serializers.ValidationError(
+                    {"window_end": "window_end must be after window_start (same-day window)."}
+                )
         return attrs
 
     def create(self, validated_data):
@@ -174,6 +204,9 @@ class UserCodeCreateSerializer(serializers.Serializer):
             is_active=True,
             start_at=validated_data.get("start_at"),
             end_at=validated_data.get("end_at"),
+            days_of_week=validated_data.get("days_of_week"),
+            window_start=validated_data.get("window_start"),
+            window_end=validated_data.get("window_end"),
         )
         allowed_states = validated_data.get("allowed_states") or DEFAULT_CODE_ALLOWED_STATES
         UserCodeAllowedState.objects.bulk_create(
@@ -190,6 +223,9 @@ class UserCodeUpdateSerializer(serializers.Serializer):
     is_active = serializers.BooleanField(required=False)
     start_at = serializers.DateTimeField(required=False, allow_null=True)
     end_at = serializers.DateTimeField(required=False, allow_null=True)
+    days_of_week = serializers.IntegerField(required=False, allow_null=True)
+    window_start = serializers.TimeField(required=False, allow_null=True)
+    window_end = serializers.TimeField(required=False, allow_null=True)
     allowed_states = serializers.ListField(
         required=False,
         child=serializers.ChoiceField(choices=UserCodeAllowedState.AlarmState.choices),
@@ -213,7 +249,13 @@ class UserCodeUpdateSerializer(serializers.Serializer):
             instance.label = validated_data["label"]
         if "is_active" in validated_data:
             instance.is_active = validated_data["is_active"]
-        if "start_at" in validated_data or "end_at" in validated_data:
+        if (
+            "start_at" in validated_data
+            or "end_at" in validated_data
+            or "days_of_week" in validated_data
+            or "window_start" in validated_data
+            or "window_end" in validated_data
+        ):
             if instance.code_type != UserCode.CodeType.TEMPORARY:
                 raise serializers.ValidationError(
                     {"code_type": "Only temporary codes can set an active time range."}
@@ -224,10 +266,36 @@ class UserCodeUpdateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {"end_at": "end_at must be after or equal to start_at."}
                 )
+            days_of_week = validated_data.get("days_of_week", instance.days_of_week)
+            if days_of_week is not None:
+                if days_of_week < 0 or days_of_week > 127:
+                    raise serializers.ValidationError(
+                        {"days_of_week": "days_of_week must be between 0 and 127."}
+                    )
+                if days_of_week == 0:
+                    raise serializers.ValidationError(
+                        {"days_of_week": "Select at least one day."}
+                    )
+            window_start = validated_data.get("window_start", instance.window_start)
+            window_end = validated_data.get("window_end", instance.window_end)
+            if (window_start is None) != (window_end is None):
+                raise serializers.ValidationError(
+                    {"window_start": "window_start and window_end must be set together."}
+                )
+            if window_start is not None and window_end is not None and window_start >= window_end:
+                raise serializers.ValidationError(
+                    {"window_end": "window_end must be after window_start (same-day window)."}
+                )
             if "start_at" in validated_data:
                 instance.start_at = validated_data["start_at"]
             if "end_at" in validated_data:
                 instance.end_at = validated_data["end_at"]
+            if "days_of_week" in validated_data:
+                instance.days_of_week = validated_data["days_of_week"]
+            if "window_start" in validated_data:
+                instance.window_start = validated_data["window_start"]
+            if "window_end" in validated_data:
+                instance.window_end = validated_data["window_end"]
         instance.save()
 
         if "allowed_states" in validated_data:

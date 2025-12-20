@@ -61,6 +61,28 @@ class CodesApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_admin_can_create_temporary_code_with_day_and_time_restrictions(self):
+        url = reverse("codes")
+        response = self.client.post(
+            url,
+            {
+                "user_id": str(self.user.id),
+                "label": "Sat morning",
+                "code": "1234",
+                "code_type": UserCode.CodeType.TEMPORARY,
+                "days_of_week": 1 << 5,  # Saturday only (Mon=0)
+                "window_start": "08:00",
+                "window_end": "10:00",
+                "reauth_password": "pass",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["code_type"], UserCode.CodeType.TEMPORARY)
+        self.assertEqual(response.data["days_of_week"], 1 << 5)
+        self.assertEqual(response.data["window_start"], "08:00:00")
+        self.assertEqual(response.data["window_end"], "10:00:00")
+
     def test_admin_can_list_codes_for_other_user(self):
         code = UserCode.objects.create(
             user=self.user,

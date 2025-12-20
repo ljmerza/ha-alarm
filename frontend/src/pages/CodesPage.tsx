@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Info } from 'lucide-react'
 import { useAuthStore } from '@/stores'
 import { codesService, usersService } from '@/services'
 import { AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { DateTimeRangePicker } from '@/components/ui/date-time-range-picker'
+import { Tooltip } from '@/components/ui/tooltip'
 
 type CreateCodeTypeOption = 'permanent' | 'temporary'
 
@@ -21,6 +23,8 @@ const ARMABLE_STATES: AlarmStateType[] = [
   AlarmState.ARMED_VACATION,
   AlarmState.ARMED_CUSTOM_BYPASS,
 ]
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
 function isAdminRole(role: UserRoleType | undefined): boolean {
   return role === UserRole.ADMIN
@@ -49,6 +53,43 @@ function toDatetimeLocalValue(iso: string | null): string {
   const offsetMs = date.getTimezoneOffset() * 60_000
   const local = new Date(date.getTime() - offsetMs)
   return local.toISOString().slice(0, 16)
+}
+
+function daysMaskToSet(mask: number): Set<number> {
+  const out = new Set<number>()
+  for (let i = 0; i < 7; i += 1) {
+    if ((mask & (1 << i)) !== 0) out.add(i)
+  }
+  return out
+}
+
+function daysSetToMask(days: Set<number>): number {
+  let mask = 0
+  for (const day of days) mask |= 1 << day
+  return mask
+}
+
+function formatDaysMask(mask: number): string {
+  if (mask === 127) return 'Every day'
+  const names: string[] = []
+  for (let i = 0; i < 7; i += 1) {
+    if ((mask & (1 << i)) !== 0) names.push(DAY_LABELS[i])
+  }
+  return names.length ? names.join(', ') : 'No days'
+}
+
+function HelpTip({ content }: { content: string }) {
+  return (
+    <Tooltip content={content} side="top">
+      <button
+        type="button"
+        className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+        aria-label="Help"
+      >
+        <Info className="h-4 w-4" />
+      </button>
+    </Tooltip>
+  )
 }
 
 export function CodesPage() {
@@ -103,16 +144,23 @@ function CodesPageContent() {
   const [createCodeType, setCreateCodeType] = useState<CreateCodeTypeOption>('permanent')
   const [createStartAtLocal, setCreateStartAtLocal] = useState<string>('')
   const [createEndAtLocal, setCreateEndAtLocal] = useState<string>('')
+  const [createDays, setCreateDays] = useState<Set<number>>(() => daysMaskToSet(127))
+  const [createWindowStart, setCreateWindowStart] = useState<string>('')
+  const [createWindowEnd, setCreateWindowEnd] = useState<string>('')
   const [createAllowedStates, setCreateAllowedStates] = useState<AlarmStateType[]>(ARMABLE_STATES)
   const [createReauthPassword, setCreateReauthPassword] = useState<string>('')
   const [createError, setCreateError] = useState<string | null>(null)
 
+  const [editingCode, setEditingCode] = useState<AlarmCode | null>(null)
   const [editingCodeId, setEditingCodeId] = useState<number | null>(null)
   const [editLabel, setEditLabel] = useState<string>('')
   const [editNewCode, setEditNewCode] = useState<string>('')
   const [editIsActive, setEditIsActive] = useState<boolean>(true)
   const [editStartAtLocal, setEditStartAtLocal] = useState<string>('')
   const [editEndAtLocal, setEditEndAtLocal] = useState<string>('')
+  const [editDays, setEditDays] = useState<Set<number>>(() => daysMaskToSet(127))
+  const [editWindowStart, setEditWindowStart] = useState<string>('')
+  const [editWindowEnd, setEditWindowEnd] = useState<string>('')
   const [editAllowedStates, setEditAllowedStates] = useState<AlarmStateType[]>([])
   const [editReauthPassword, setEditReauthPassword] = useState<string>('')
   const [editError, setEditError] = useState<string | null>(null)
@@ -127,18 +175,23 @@ function CodesPageContent() {
   })()
 
   const beginEdit = (code: AlarmCode) => {
+    setEditingCode(code)
     setEditingCodeId(code.id)
     setEditLabel(code.label || '')
     setEditNewCode('')
     setEditIsActive(code.isActive)
     setEditStartAtLocal(toDatetimeLocalValue(code.startAt))
     setEditEndAtLocal(toDatetimeLocalValue(code.endAt))
+    setEditDays(daysMaskToSet(code.daysOfWeek ?? 127))
+    setEditWindowStart(code.windowStart || '')
+    setEditWindowEnd(code.windowEnd || '')
     setEditAllowedStates(code.allowedStates || [])
     setEditReauthPassword('')
     setEditError(null)
   }
 
   const cancelEdit = () => {
+    setEditingCode(null)
     setEditingCodeId(null)
     setEditError(null)
     setEditReauthPassword('')
@@ -182,6 +235,21 @@ function CodesPageContent() {
       setCreateError('Active until must be after active from.')
       return
     }
+    const daysOfWeek = createCodeType === 'temporary' ? daysSetToMask(createDays) : null
+    if (createCodeType === 'temporary' && daysOfWeek === 0) {
+      setCreateError('Select at least one day.')
+      return
+    }
+    const windowStart = createCodeType === 'temporary' ? (createWindowStart.trim() || null) : null
+    const windowEnd = createCodeType === 'temporary' ? (createWindowEnd.trim() || null) : null
+    if (createCodeType === 'temporary' && ((windowStart == null) !== (windowEnd == null))) {
+      setCreateError('Time window start and end must both be set.')
+      return
+    }
+    if (createCodeType === 'temporary' && windowStart && windowEnd && windowStart >= windowEnd) {
+      setCreateError('Time window end must be after start.')
+      return
+    }
     try {
       await createMutation.mutateAsync({
         userId: targetUserId,
@@ -190,6 +258,9 @@ function CodesPageContent() {
         codeType: createCodeType,
         startAt,
         endAt,
+        daysOfWeek,
+        windowStart,
+        windowEnd,
         allowedStates: createAllowedStates,
         reauthPassword: createReauthPassword,
       })
@@ -198,6 +269,9 @@ function CodesPageContent() {
       setCreateCodeType('permanent')
       setCreateStartAtLocal('')
       setCreateEndAtLocal('')
+      setCreateDays(daysMaskToSet(127))
+      setCreateWindowStart('')
+      setCreateWindowEnd('')
       setCreateAllowedStates(ARMABLE_STATES)
       setCreateReauthPassword('')
     } catch (err) {
@@ -223,11 +297,30 @@ function CodesPageContent() {
       setEditError('Active until must be after active from.')
       return
     }
+    const isTemporary = editingCode?.codeType === 'temporary'
+    const daysOfWeek = isTemporary ? daysSetToMask(editDays) : null
+    if (isTemporary && daysOfWeek === 0) {
+      setEditError('Select at least one day.')
+      return
+    }
+    const windowStart = isTemporary ? (editWindowStart.trim() || null) : null
+    const windowEnd = isTemporary ? (editWindowEnd.trim() || null) : null
+    if (isTemporary && ((windowStart == null) !== (windowEnd == null))) {
+      setEditError('Time window start and end must both be set.')
+      return
+    }
+    if (isTemporary && windowStart && windowEnd && windowStart >= windowEnd) {
+      setEditError('Time window end must be after start.')
+      return
+    }
     const req: UpdateCodeRequest = {
       label: editLabel.trim(),
       isActive: editIsActive,
       startAt,
       endAt,
+      daysOfWeek,
+      windowStart,
+      windowEnd,
       allowedStates: editAllowedStates,
       reauthPassword: editReauthPassword,
     }
@@ -296,9 +389,12 @@ function CodesPageContent() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="create-type">
-                    Type
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium" htmlFor="create-type">
+                      Type
+                    </label>
+                    <HelpTip content="Temporary codes can have date/time and day-of-week restrictions. Permanent codes are always valid (unless deactivated)." />
+                  </div>
                   <select
                     id="create-type"
                     className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -326,6 +422,12 @@ function CodesPageContent() {
                   <label className="text-sm font-medium" htmlFor="create-code">
                     Code (4–8 digits)
                   </label>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-xs text-muted-foreground">
+                      Codes are never shown again after creation.
+                    </div>
+                    <HelpTip content="Codes are stored hashed on the server. Enter a 4–8 digit PIN; you cannot view it later." />
+                  </div>
                   <Input
                     id="create-code"
                     value={createCode}
@@ -349,11 +451,87 @@ function CodesPageContent() {
                     }}
                     disabled={createMutation.isPending}
                   />
+                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <HelpTip content="If set, the code only works between these timestamps (in the user's local timezone). Leave blank for no overall date range." />
+                    <span>Optional overall validity window.</span>
+                  </div>
+                </div>
+              )}
+
+              {createCodeType === 'temporary' && (
+                <div className="mt-4 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium">Days allowed</div>
+                      <HelpTip content="Restrict which weekdays this code can be used. Mon=0 … Sun=6 internally." />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {DAY_LABELS.map((label, idx) => (
+                        <label key={label} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={createDays.has(idx)}
+                            onChange={(e) => {
+                              const checked = e.target.checked
+                              setCreateDays((cur) => {
+                                const next = new Set(cur)
+                                if (checked) next.add(idx)
+                                else next.delete(idx)
+                                return next
+                              })
+                            }}
+                            disabled={createMutation.isPending}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatDaysMask(daysSetToMask(createDays))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium" htmlFor="create-window-start">
+                          Time window start (optional)
+                        </label>
+                        <HelpTip content="If set (with an end time), the code is only valid during this daily time window in the user's local timezone." />
+                      </div>
+                      <Input
+                        id="create-window-start"
+                        type="time"
+                        value={createWindowStart}
+                        onChange={(e) => setCreateWindowStart(e.target.value)}
+                        disabled={createMutation.isPending}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium" htmlFor="create-window-end">
+                          Time window end (optional)
+                        </label>
+                        <HelpTip content="End must be after start (same-day window). Leave both blank for no daily time restriction." />
+                      </div>
+                      <Input
+                        id="create-window-end"
+                        type="time"
+                        value={createWindowEnd}
+                        onChange={(e) => setCreateWindowEnd(e.target.value)}
+                        disabled={createMutation.isPending}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
               <div className="mt-4 space-y-2">
-                <div className="text-sm font-medium">Allowed Arm States</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-medium">Allowed Arm States</div>
+                  <HelpTip content="Controls which armed states this code is allowed to arm into. (Disarm is still allowed if the code is otherwise valid.)" />
+                </div>
                 <div className="grid gap-2 md:grid-cols-2">
                   {ARMABLE_STATES.map((state) => (
                     <label key={state} className="flex items-center gap-2 text-sm">
@@ -375,9 +553,12 @@ function CodesPageContent() {
               </div>
 
               <div className="mt-4 space-y-2">
-                <label className="text-sm font-medium" htmlFor="create-password">
-                  Re-authenticate (password)
-                </label>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium" htmlFor="create-password">
+                    Re-authenticate (password)
+                  </label>
+                  <HelpTip content="Required to create or modify codes. This prevents someone with an unlocked session from changing codes silently." />
+                </div>
                 <Input
                   id="create-password"
                   type="password"
@@ -444,20 +625,26 @@ function CodesPageContent() {
                       {code.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
-              <div className="text-sm text-muted-foreground">
-                PIN length: {code.pinLength} • Type: {code.codeType}
-              </div>
-              {code.codeType === 'temporary' && (code.startAt || code.endAt) && (
-                <div className="text-sm text-muted-foreground">
-                  Active window:{' '}
-                  {code.startAt ? new Date(code.startAt).toLocaleString() : '—'} →{' '}
-                  {code.endAt ? new Date(code.endAt).toLocaleString() : '—'}
-                </div>
-              )}
-              <div className="mt-2 flex flex-wrap gap-2">
-                {(code.allowedStates || []).length === 0 ? (
-                  <span className="text-sm text-muted-foreground">No allowed arm states</span>
-                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    PIN length: {code.pinLength} • Type: {code.codeType}
+                  </div>
+                  {code.codeType === 'temporary' && (
+                    <div className="text-sm text-muted-foreground">
+                      Days: {formatDaysMask(code.daysOfWeek ?? 127)}
+                      {code.windowStart && code.windowEnd ? ` • Time: ${code.windowStart}–${code.windowEnd}` : ''}
+                    </div>
+                  )}
+                  {code.codeType === 'temporary' && (code.startAt || code.endAt) && (
+                    <div className="text-sm text-muted-foreground">
+                      Active window:{' '}
+                      {code.startAt ? new Date(code.startAt).toLocaleString() : '—'} →{' '}
+                      {code.endAt ? new Date(code.endAt).toLocaleString() : '—'}
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(code.allowedStates || []).length === 0 ? (
+                      <span className="text-sm text-muted-foreground">No allowed arm states</span>
+                    ) : (
                       code.allowedStates.map((state) => (
                         <Badge key={state} variant="outline">
                           {AlarmStateLabels[state] || state}
@@ -519,8 +706,71 @@ function CodesPageContent() {
                     />
                   )}
 
+                  {code.codeType === 'temporary' && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium">Days allowed</div>
+                        <div className="flex flex-wrap gap-2">
+                          {DAY_LABELS.map((label, idx) => (
+                            <label key={label} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4"
+                                checked={editDays.has(idx)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked
+                                  setEditDays((cur) => {
+                                    const next = new Set(cur)
+                                    if (checked) next.add(idx)
+                                    else next.delete(idx)
+                                    return next
+                                  })
+                                }}
+                                disabled={updateMutation.isPending}
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatDaysMask(daysSetToMask(editDays))}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium" htmlFor={`edit-window-start-${code.id}`}>
+                            Time window start (optional)
+                          </label>
+                          <Input
+                            id={`edit-window-start-${code.id}`}
+                            type="time"
+                            value={editWindowStart}
+                            onChange={(e) => setEditWindowStart(e.target.value)}
+                            disabled={updateMutation.isPending}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium" htmlFor={`edit-window-end-${code.id}`}>
+                            Time window end (optional)
+                          </label>
+                          <Input
+                            id={`edit-window-end-${code.id}`}
+                            type="time"
+                            value={editWindowEnd}
+                            onChange={(e) => setEditWindowEnd(e.target.value)}
+                            disabled={updateMutation.isPending}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
-                    <div className="text-sm font-medium">Allowed Arm States</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium">Allowed Arm States</div>
+                      <HelpTip content="Controls which armed states this code is allowed to arm into." />
+                    </div>
                     <div className="grid gap-2 md:grid-cols-2">
                       {ARMABLE_STATES.map((state) => (
                         <label key={state} className="flex items-center gap-2 text-sm">
@@ -553,9 +803,12 @@ function CodesPageContent() {
                   </label>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor={`edit-password-${code.id}`}>
-                      Re-authenticate (password)
-                    </label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium" htmlFor={`edit-password-${code.id}`}>
+                        Re-authenticate (password)
+                      </label>
+                      <HelpTip content="Required to save changes to this code." />
+                    </div>
                     <Input
                       id={`edit-password-${code.id}`}
                       type="password"

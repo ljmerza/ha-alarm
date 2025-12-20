@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.core.paginator import Paginator
+from django.db.models import Max
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
@@ -10,7 +11,7 @@ from rest_framework.views import APIView
 from . import services
 from . import home_assistant
 from . import rules_engine
-from .models import AlarmEvent, AlarmSettingsProfile, AlarmState, Entity, Rule, Sensor
+from .models import AlarmEvent, AlarmEventType, AlarmSettingsProfile, AlarmState, Entity, Rule, RuleEntityRef, Sensor
 from .serializers import (
     AlarmEventSerializer,
     AlarmSettingsProfileSerializer,
@@ -202,7 +203,50 @@ class AlarmSettingsView(APIView):
 class SensorsView(APIView):
     def get(self, request):
         sensors = Sensor.objects.all()
-        return Response(SensorSerializer(sensors, many=True).data)
+        entity_ids = [s.entity_id for s in sensors if s.entity_id]
+        entity_state_by_entity_id: dict[str, str | None] = {}
+        if entity_ids:
+            entity_state_by_entity_id.update(
+                Entity.objects.filter(entity_id__in=entity_ids).values_list("entity_id", "last_state")
+            )
+
+        used_entity_ids_in_rules = set(
+            RuleEntityRef.objects.filter(rule__enabled=True).values_list("entity__entity_id", flat=True)
+        )
+
+        status_obj = home_assistant.get_status()
+        if status_obj.configured and status_obj.reachable:
+            try:
+                for item in home_assistant.list_entities():
+                    entity_id = item.get("entity_id")
+                    state = item.get("state")
+                    if isinstance(entity_id, str) and entity_id:
+                        entity_state_by_entity_id[entity_id] = state if isinstance(state, str) else None
+            except Exception:
+                # Fall back to DB-backed states when HA can't be queried live.
+                pass
+
+        last_triggered_by_sensor_id = dict(
+            AlarmEvent.objects.filter(
+                event_type=AlarmEventType.SENSOR_TRIGGERED,
+                sensor__in=sensors,
+            )
+            .values("sensor_id")
+            .annotate(last_ts=Max("timestamp"))
+            .values_list("sensor_id", "last_ts")
+        )
+
+        return Response(
+            SensorSerializer(
+                sensors,
+                many=True,
+                context={
+                    "entity_state_by_entity_id": entity_state_by_entity_id,
+                    "last_triggered_by_sensor_id": last_triggered_by_sensor_id,
+                    "used_entity_ids_in_rules": used_entity_ids_in_rules,
+                },
+            ).data
+        )
 
     def post(self, request):
         serializer = SensorCreateSerializer(data=request.data)
@@ -214,14 +258,92 @@ class SensorsView(APIView):
 class SensorDetailView(APIView):
     def get(self, request, sensor_id: int):
         sensor = Sensor.objects.get(pk=sensor_id)
-        return Response(SensorSerializer(sensor).data)
+        entity_state_by_entity_id: dict[str, str | None] = {}
+        if sensor.entity_id:
+            last_state = (
+                Entity.objects.filter(entity_id=sensor.entity_id)
+                .values_list("last_state", flat=True)
+                .first()
+            )
+            entity_state_by_entity_id[sensor.entity_id] = last_state
+
+        status_obj = home_assistant.get_status()
+        if status_obj.configured and status_obj.reachable and sensor.entity_id:
+            try:
+                for item in home_assistant.list_entities():
+                    entity_id = item.get("entity_id")
+                    if entity_id != sensor.entity_id:
+                        continue
+                    state = item.get("state")
+                    entity_state_by_entity_id[sensor.entity_id] = state if isinstance(state, str) else None
+                    break
+            except Exception:
+                pass
+
+        last_triggered_by_sensor_id = dict(
+            AlarmEvent.objects.filter(
+                event_type=AlarmEventType.SENSOR_TRIGGERED,
+                sensor=sensor,
+            )
+            .values("sensor_id")
+            .annotate(last_ts=Max("timestamp"))
+            .values_list("sensor_id", "last_ts")
+        )
+
+        used_entity_ids_in_rules = set(
+            RuleEntityRef.objects.filter(rule__enabled=True).values_list("entity__entity_id", flat=True)
+        )
+
+        return Response(
+            SensorSerializer(
+                sensor,
+                context={
+                    "entity_state_by_entity_id": entity_state_by_entity_id,
+                    "last_triggered_by_sensor_id": last_triggered_by_sensor_id,
+                    "used_entity_ids_in_rules": used_entity_ids_in_rules,
+                },
+            ).data
+        )
 
     def patch(self, request, sensor_id: int):
         sensor = Sensor.objects.get(pk=sensor_id)
         serializer = SensorUpdateSerializer(sensor, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         sensor = serializer.save()
-        return Response(SensorSerializer(sensor).data, status=status.HTTP_200_OK)
+        entity_state_by_entity_id: dict[str, str | None] = {}
+        if sensor.entity_id:
+            last_state = (
+                Entity.objects.filter(entity_id=sensor.entity_id)
+                .values_list("last_state", flat=True)
+                .first()
+            )
+            entity_state_by_entity_id[sensor.entity_id] = last_state
+
+        last_triggered_by_sensor_id = dict(
+            AlarmEvent.objects.filter(
+                event_type=AlarmEventType.SENSOR_TRIGGERED,
+                sensor=sensor,
+            )
+            .values("sensor_id")
+            .annotate(last_ts=Max("timestamp"))
+            .values_list("sensor_id", "last_ts")
+        )
+
+        used_entity_ids_in_rules = set(
+            RuleEntityRef.objects.filter(rule__enabled=True).values_list("entity__entity_id", flat=True)
+        )
+
+        return Response(
+            SensorSerializer(
+                sensor,
+                context={
+                    "entity_state_by_entity_id": entity_state_by_entity_id,
+                    "last_triggered_by_sensor_id": last_triggered_by_sensor_id,
+                    "used_entity_ids_in_rules": used_entity_ids_in_rules,
+                },
+            ).data,
+            status=status.HTTP_200_OK,
+        )
 
     def delete(self, request, sensor_id: int):
         sensor = Sensor.objects.get(pk=sensor_id)

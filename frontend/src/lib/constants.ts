@@ -19,7 +19,7 @@ const resolveApiBaseUrl = (): string => {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl()
-export const WS_BASE_URL = import.meta.env.VITE_WS_URL || ''
+export const WS_BASE_URL = import.meta.env.VITE_WS_URL || API_BASE_URL
 
 // Alarm States
 export const AlarmState = {
