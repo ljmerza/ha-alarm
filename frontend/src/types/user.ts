@@ -1,7 +1,7 @@
 import type { UserRoleType } from '@/lib/constants'
 
 export interface User {
-  id: number
+  id: string
   email: string
   displayName: string
   role: UserRoleType
@@ -38,7 +38,7 @@ export interface TokenPair {
 
 export interface UserNotificationPreference {
   id: number
-  userId: number
+  userId: string
   eventType: string
   enabledChannels: string[]
   haNotifyServices: string[]

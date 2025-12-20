@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
-from django.db import transaction
+from django.contrib.auth.hashers import check_password
+from django.db import models, transaction
 from django.utils import timezone
+
+from accounts.models import UserCode
 
 from .models import (
     AlarmEvent,
@@ -26,6 +29,14 @@ ARMED_STATES = {
 
 
 class TransitionError(RuntimeError):
+    pass
+
+
+class CodeRequiredError(TransitionError):
+    pass
+
+
+class InvalidCodeError(TransitionError):
     pass
 
 
@@ -129,6 +140,53 @@ def _record_sensor_event(sensor: Sensor, timestamp=None) -> AlarmEvent:
         sensor=sensor,
         metadata={"is_entry_point": sensor.is_entry_point},
     )
+
+
+def record_failed_code(*, user, action: str, metadata: dict | None = None, timestamp=None) -> AlarmEvent:
+    return AlarmEvent.objects.create(
+        event_type=AlarmEventType.FAILED_CODE,
+        state_from=None,
+        state_to=None,
+        timestamp=timestamp or timezone.now(),
+        user=user,
+        code=None,
+        zone=None,
+        sensor=None,
+        metadata={"action": action, **(metadata or {})},
+    )
+
+
+def record_code_used(*, user, code: UserCode, action: str, metadata: dict | None = None, timestamp=None) -> AlarmEvent:
+    now = timestamp or timezone.now()
+    UserCode.objects.filter(id=code.id).update(
+        uses_count=models.F("uses_count") + 1,
+        last_used_at=now,
+    )
+    return AlarmEvent.objects.create(
+        event_type=AlarmEventType.CODE_USED,
+        state_from=None,
+        state_to=None,
+        timestamp=now,
+        user=user,
+        code=code,
+        zone=None,
+        sensor=None,
+        metadata={"action": action, **(metadata or {})},
+    )
+
+
+def validate_user_code(*, user, raw_code: str) -> UserCode:
+    if raw_code is None:
+        raise CodeRequiredError("Code is required.")
+    raw_code = str(raw_code).strip()
+    if len(raw_code) < 4 or len(raw_code) > 8:
+        raise InvalidCodeError("Invalid code.")
+
+    candidates = UserCode.objects.filter(user=user, is_active=True)
+    for candidate in candidates:
+        if check_password(raw_code, candidate.code_hash):
+            return candidate
+    raise InvalidCodeError("Invalid code.")
 
 
 def _get_snapshot_for_update() -> AlarmStateSnapshot:

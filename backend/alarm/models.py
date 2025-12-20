@@ -27,6 +27,16 @@ class AlarmEventType(models.TextChoices):
     STATE_CHANGED = "state_changed", "State changed"
 
 
+class AlarmSystem(models.Model):
+    name = models.CharField(max_length=150)
+    timezone = models.CharField(max_length=64, default=settings.TIME_ZONE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return self.name
+
+
 class AlarmSettingsProfile(models.Model):
     name = models.CharField(max_length=150, unique=True)
     is_active = models.BooleanField(default=False)

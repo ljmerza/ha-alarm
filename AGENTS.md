@@ -20,6 +20,7 @@ Quick orientation and rules for collaborating on this repo.
 - Document architectural decisions as ADRs in `docs/adr/`, including alternatives and outstanding todos.
 - Prefer `rg` for searching.
 - Keep changes minimal and aligned with existing patterns.
+- Use the Docker helper scripts for running app commands (required).
 
 ## Common commands
 ```bash

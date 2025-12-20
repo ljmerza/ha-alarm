@@ -90,6 +90,16 @@ export function useAlarm() {
     .flatMap((zone) => zone.sensors)
     .filter((sensor) => sensor.currentState === 'open' && sensor.isActive)
 
+  // "Down/unavailable" sensors: configured but status can't be read
+  const unknownSensors = zones
+    .flatMap((zone) => zone.sensors)
+    .filter(
+      (sensor) =>
+        sensor.isActive &&
+        sensor.entityId &&
+        sensor.currentState === 'unknown'
+    )
+
   const canArm = openSensors.length === 0 || settings?.sensorBehavior?.forceArmEnabled
 
   return {
@@ -113,6 +123,7 @@ export function useAlarm() {
     codeRequiredForArm,
     availableArmingStates,
     openSensors,
+    unknownSensors,
     canArm,
 
     // Actions

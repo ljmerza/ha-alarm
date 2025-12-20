@@ -1,4 +1,6 @@
 export { LoginPage, default as loginPage } from './LoginPage'
+export { OnboardingPage, default as onboardingPage } from './OnboardingPage'
+export { SetupWizardPage, default as setupWizardPage } from './SetupWizardPage'
 export { DashboardPage, default as dashboardPage } from './DashboardPage'
 export { ZonesPage, default as zonesPage } from './ZonesPage'
 export { CodesPage, default as codesPage } from './CodesPage'

@@ -4,7 +4,7 @@ export type CodeType = 'permanent' | 'temporary' | 'one_time' | 'duress'
 
 export interface AlarmCode {
   id: number
-  userId: number
+  userId: string
   userName: string // Denormalized for display
   name: string // e.g., "Main Code", "Dog Walker"
   codeType: CodeType
@@ -35,7 +35,7 @@ export interface CodeUsage {
 }
 
 export interface CreateCodeRequest {
-  userId: number
+  userId: string
   name: string
   code: string // Plain text, will be hashed on server
   codeType: CodeType
@@ -71,6 +71,6 @@ export interface ValidateCodeRequest {
 export interface ValidateCodeResponse {
   valid: boolean
   codeId: number | null
-  userId: number | null
+  userId: string | null
   reason?: string // e.g., "expired", "outside_time_window", "max_uses_exceeded"
 }

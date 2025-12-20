@@ -21,6 +21,8 @@ for candidate in [env_file, BASE_DIR / ".env", BASE_DIR.parent / ".env"]:
 SECRET_KEY = env("SECRET_KEY", default="insecure-dev-secret-key")
 DEBUG = env.bool("DEBUG", default=False)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+if env.bool("ALLOW_ALL_HOSTS", default=False):
+    ALLOWED_HOSTS = ["*"]
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 INSTALLED_APPS = [
@@ -89,7 +91,7 @@ PASSWORD_HASHERS = [
 ]
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = env.str("TIME_ZONE", default="UTC")
 USE_I18N = True
 USE_TZ = True
 
@@ -105,6 +107,7 @@ AUTH_USER_MODEL = "accounts.User"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.BearerTokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ],
@@ -118,6 +121,7 @@ REST_FRAMEWORK = {
 }
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=False)
 CORS_ALLOW_CREDENTIALS = True
 
 REDIS_URL = env.str("REDIS_URL", default=None)
@@ -136,6 +140,17 @@ else:
 CELERY_BROKER_URL = env.str("CELERY_BROKER_URL", default=REDIS_URL or "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = env.str("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
+
+# Home Assistant integration (configured via env; UI is read-only for now)
+# Prefer HOME_ASSISTANT_* but support existing HA_* keys for compatibility.
+HOME_ASSISTANT_URL = (
+    env.str("HOME_ASSISTANT_URL", default="").strip()
+    or env.str("HA_URL", default="").strip()
+)
+HOME_ASSISTANT_TOKEN = (
+    env.str("HOME_ASSISTANT_TOKEN", default="").strip()
+    or env.str("HA_TOKEN", default="").strip()
+)
 
 LOGGING = {
     "version": 1,

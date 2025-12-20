@@ -11,3 +11,4 @@ django-cors-headers>=4.3
 argon2-cffi>=23.1
 gunicorn>=21.2
 uvicorn>=0.27
+homeassistant-api

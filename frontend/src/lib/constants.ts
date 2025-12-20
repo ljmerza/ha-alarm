@@ -1,5 +1,24 @@
 // API Configuration
-export const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+const resolveApiBaseUrl = (): string => {
+  const configured = import.meta.env.VITE_API_URL
+  if (configured) {
+    return configured
+  }
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  const { protocol, hostname, port } = window.location
+  if (!port) {
+    return ''
+  }
+  const numericPort = Number(port)
+  if (!Number.isFinite(numericPort) || numericPort <= 1) {
+    return ''
+  }
+  return `${protocol}//${hostname}:${numericPort - 1}`
+}
+
+export const API_BASE_URL = resolveApiBaseUrl()
 export const WS_BASE_URL = import.meta.env.VITE_WS_URL || ''
 
 // Alarm States
@@ -67,7 +86,10 @@ export type EventTypeType = (typeof EventType)[keyof typeof EventType]
 // Routes
 export const Routes = {
   HOME: '/',
+  ONBOARDING: '/onboarding',
   LOGIN: '/login',
+  SETUP: '/setup',
+  SETUP_IMPORT_SENSORS: '/setup/import-sensors',
   DASHBOARD: '/dashboard',
   ZONES: '/zones',
   CODES: '/codes',

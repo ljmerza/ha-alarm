@@ -24,7 +24,7 @@ export const alarmService = {
   },
 
   async cancelArming(code?: string): Promise<AlarmStateSnapshot> {
-    return api.post<AlarmStateSnapshot>('/api/alarm/cancel/', { code })
+    return api.post<AlarmStateSnapshot>('/api/alarm/cancel-arming/', { code })
   },
 
   async trigger(): Promise<AlarmStateSnapshot> {
@@ -45,7 +45,7 @@ export const alarmService = {
   },
 
   async createSettingsProfile(
-    profile: Omit<AlarmSettingsProfile, 'id' | 'createdAt' | 'modifiedAt'>
+    profile: Omit<AlarmSettingsProfile, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<AlarmSettingsProfile> {
     return api.post<AlarmSettingsProfile>('/api/alarm/settings/profiles/', profile)
   },
@@ -70,7 +70,7 @@ export const alarmService = {
     eventType?: string
     startDate?: string
     endDate?: string
-    userId?: number
+    userId?: string
   }): Promise<PaginatedResponse<AlarmEvent>> {
     return api.get<PaginatedResponse<AlarmEvent>>('/api/events/', params ? { ...params } : undefined)
   },

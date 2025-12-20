@@ -9,6 +9,11 @@ class AlarmSettingsProfileAdmin(admin.ModelAdmin):
     list_filter = ("is_active",)
 
 
+@admin.register(models.AlarmSystem)
+class AlarmSystemAdmin(admin.ModelAdmin):
+    list_display = ("name", "timezone", "created_at", "updated_at")
+
+
 @admin.register(models.AlarmStateSnapshot)
 class AlarmStateSnapshotAdmin(admin.ModelAdmin):
     list_display = (

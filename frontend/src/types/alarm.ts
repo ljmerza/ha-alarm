@@ -5,11 +5,17 @@ export interface AlarmStateSnapshot {
   id: number
   currentState: AlarmStateType
   previousState: AlarmStateType | null
-  settingsProfileId: number
+  settingsProfile: number
   enteredAt: string // ISO datetime
   exitAt: string | null // ISO datetime, for timed transitions
   lastTransitionReason: string
-  lastTransitionBy: number | null // User ID
+  lastTransitionBy: string | null // User ID (UUID)
+  targetArmedState: AlarmStateType | null
+  timingSnapshot: {
+    delayTime?: number
+    armingTime?: number
+    triggerTime?: number
+  }
 }
 
 // Alarm Settings Profile
@@ -27,7 +33,7 @@ export interface AlarmSettingsProfile {
   audioVisualSettings: AudioVisualSettings
   sensorBehavior: SensorBehavior
   createdAt: string
-  modifiedAt: string
+  updatedAt: string
 }
 
 export interface StateOverrides {
@@ -81,7 +87,7 @@ export interface AlarmEvent {
   stateFrom: AlarmStateType | null
   stateTo: AlarmStateType | null
   timestamp: string
-  userId: number | null
+  userId: string | null
   codeId: number | null
   zoneId: number | null
   sensorId: number | null

@@ -33,6 +33,8 @@ export function AlarmPanel({ className }: AlarmPanelProps) {
     isTriggered,
     codeRequiredForArm,
     availableArmingStates,
+    openSensors,
+    unknownSensors,
     arm,
     disarm,
     cancelArming,
@@ -124,12 +126,37 @@ export function AlarmPanel({ className }: AlarmPanelProps) {
             {/* Action Buttons based on state */}
             <div className="w-full mt-6">
               {isDisarmed && (
-                <ArmButtons
-                  onArm={handleArmClick}
-                  availableStates={availableArmingStates}
-                  currentState={currentState}
-                  disabled={isLoading}
-                />
+                <div className="space-y-3">
+                  {(openSensors.length > 0 || unknownSensors.length > 0) && (
+                    <div className="rounded-lg border p-3 text-sm">
+                      <div className="font-medium">Arming warnings</div>
+                      <ul className="mt-2 space-y-1 text-muted-foreground">
+                        {openSensors.length > 0 && (
+                          <li>
+                            {openSensors.length} sensor{openSensors.length === 1 ? '' : 's'} open
+                            {' '}({openSensors.slice(0, 2).map((s) => s.name).join(', ')}
+                            {openSensors.length > 2 ? ', …' : ''})
+                          </li>
+                        )}
+                        {unknownSensors.length > 0 && (
+                          <li>
+                            {unknownSensors.length} sensor{unknownSensors.length === 1 ? '' : 's'} unavailable
+                            {' '}({unknownSensors.slice(0, 2).map((s) => s.name).join(', ')}
+                            {unknownSensors.length > 2 ? ', …' : ''})
+                          </li>
+                        )}
+                        <li>Arming is still allowed, but behavior may be unexpected.</li>
+                      </ul>
+                    </div>
+                  )}
+
+                  <ArmButtons
+                    onArm={handleArmClick}
+                    availableStates={availableArmingStates}
+                    currentState={currentState}
+                    disabled={isLoading}
+                  />
+                </div>
               )}
 
               {isArming && (
