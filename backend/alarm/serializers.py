@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from .models import AlarmEvent, AlarmSettingsProfile, AlarmStateSnapshot, Sensor, Zone
+from .models import (
+    AlarmEvent,
+    AlarmSettingsProfile,
+    AlarmStateSnapshot,
+    Entity,
+    Rule,
+    RuleEntityRef,
+    Sensor,
+)
 
 
 class AlarmStateSnapshotSerializer(serializers.ModelSerializer):
@@ -44,7 +52,6 @@ class AlarmSettingsProfileSerializer(serializers.ModelSerializer):
 
 
 class SensorSerializer(serializers.ModelSerializer):
-    zone_id = serializers.IntegerField(read_only=True)
     entity_id = serializers.CharField(allow_blank=True, required=False)
     current_state = serializers.SerializerMethodField()
     last_triggered = serializers.SerializerMethodField()
@@ -54,7 +61,6 @@ class SensorSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "name",
-            "zone_id",
             "entity_id",
             "is_active",
             "is_entry_point",
@@ -68,36 +74,9 @@ class SensorSerializer(serializers.ModelSerializer):
     def get_last_triggered(self, obj: Sensor):
         return None
 
-
-class ZoneSerializer(serializers.ModelSerializer):
-    sensors = SensorSerializer(many=True, read_only=True)
-    is_bypassed = serializers.SerializerMethodField()
-    bypassed_until = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Zone
-        fields = (
-            "id",
-            "name",
-            "is_active",
-            "entry_delay_override",
-            "active_states",
-            "sensors",
-            "is_bypassed",
-            "bypassed_until",
-        )
-
-    def get_is_bypassed(self, obj: Zone) -> bool:
-        return False
-
-    def get_bypassed_until(self, obj: Zone):
-        return None
-
-
 class AlarmEventSerializer(serializers.ModelSerializer):
     user_id = serializers.UUIDField(source="user_id", allow_null=True, read_only=True)
     code_id = serializers.IntegerField(source="code_id", allow_null=True, read_only=True)
-    zone_id = serializers.IntegerField(source="zone_id", allow_null=True, read_only=True)
     sensor_id = serializers.IntegerField(source="sensor_id", allow_null=True, read_only=True)
 
     class Meta:
@@ -110,23 +89,9 @@ class AlarmEventSerializer(serializers.ModelSerializer):
             "timestamp",
             "user_id",
             "code_id",
-            "zone_id",
             "sensor_id",
             "metadata",
         )
-
-
-class ZoneCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Zone
-        fields = (
-            "id",
-            "name",
-            "is_active",
-            "entry_delay_override",
-            "active_states",
-        )
-
 
 class SensorCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -134,7 +99,6 @@ class SensorCreateSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "name",
-            "zone",
             "entity_id",
             "is_active",
             "is_entry_point",
@@ -149,3 +113,137 @@ class SensorCreateSerializer(serializers.ModelSerializer):
         if Sensor.objects.filter(entity_id=entity_id).exists():
             raise serializers.ValidationError("This entity_id is already mapped.")
         return entity_id
+
+
+class SensorUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Sensor
+        fields = (
+            "id",
+            "name",
+            "is_active",
+            "is_entry_point",
+        )
+
+
+class EntitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Entity
+        fields = (
+            "id",
+            "entity_id",
+            "domain",
+            "name",
+            "device_class",
+            "last_state",
+            "last_changed",
+            "last_seen",
+            "attributes",
+            "source",
+            "created_at",
+            "updated_at",
+        )
+
+
+class RuleSerializer(serializers.ModelSerializer):
+    entity_ids = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Rule
+        fields = (
+            "id",
+            "name",
+            "kind",
+            "enabled",
+            "priority",
+            "schema_version",
+            "definition",
+            "cooldown_seconds",
+            "created_by",
+            "created_at",
+            "updated_at",
+            "entity_ids",
+        )
+
+    def get_entity_ids(self, obj: Rule) -> list[str]:
+        return list(
+            RuleEntityRef.objects.filter(rule=obj)
+            .select_related("entity")
+            .values_list("entity__entity_id", flat=True)
+        )
+
+
+class RuleUpsertSerializer(serializers.ModelSerializer):
+    entity_ids = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+    )
+
+    class Meta:
+        model = Rule
+        fields = (
+            "id",
+            "name",
+            "kind",
+            "enabled",
+            "priority",
+            "schema_version",
+            "definition",
+            "cooldown_seconds",
+            "entity_ids",
+        )
+
+    def validate_definition(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("definition must be an object.")
+        return value
+
+    def validate_entity_ids(self, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for raw in value:
+            entity_id = (raw or "").strip()
+            if not entity_id:
+                continue
+            if "." not in entity_id:
+                raise serializers.ValidationError(f"Invalid entity_id: {entity_id}")
+            cleaned.append(entity_id)
+        return sorted(set(cleaned))
+
+    def _sync_entity_refs(self, rule: Rule, entity_ids: list[str]) -> None:
+        entities: list[Entity] = []
+        for entity_id in entity_ids:
+            domain = entity_id.split(".", 1)[0]
+            entity, _ = Entity.objects.get_or_create(
+                entity_id=entity_id,
+                defaults={
+                    "domain": domain,
+                    "name": entity_id,
+                    "attributes": {},
+                },
+            )
+            entities.append(entity)
+
+        RuleEntityRef.objects.filter(rule=rule).exclude(entity__in=entities).delete()
+        existing = set(
+            RuleEntityRef.objects.filter(rule=rule, entity__in=entities).values_list(
+                "entity_id", flat=True
+            )
+        )
+        RuleEntityRef.objects.bulk_create(
+            [RuleEntityRef(rule=rule, entity=e) for e in entities if e.id not in existing],
+            ignore_conflicts=True,
+        )
+
+    def create(self, validated_data):
+        entity_ids = validated_data.pop("entity_ids", [])
+        rule = super().create(validated_data)
+        self._sync_entity_refs(rule, entity_ids)
+        return rule
+
+    def update(self, instance, validated_data):
+        entity_ids = validated_data.pop("entity_ids", None)
+        rule = super().update(instance, validated_data)
+        if entity_ids is not None:
+            self._sync_entity_refs(rule, entity_ids)
+        return rule

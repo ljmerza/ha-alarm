@@ -66,6 +66,12 @@ const stateConfig: Record<
     textColor: 'text-blue-500',
     borderColor: 'border-blue-500',
   },
+  [AlarmState.ARMED_CUSTOM_BYPASS]: {
+    icon: ShieldCheck,
+    bgColor: 'bg-slate-500',
+    textColor: 'text-slate-500',
+    borderColor: 'border-slate-500',
+  },
   [AlarmState.PENDING]: {
     icon: AlertTriangle,
     bgColor: 'bg-orange-500',

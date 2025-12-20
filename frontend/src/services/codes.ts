@@ -11,8 +11,8 @@ import type {
 } from '@/types'
 
 export const codesService = {
-  async getCodes(): Promise<AlarmCode[]> {
-    return api.get<AlarmCode[]>('/api/codes/')
+  async getCodes(params?: { userId?: string }): Promise<AlarmCode[]> {
+    return api.get<AlarmCode[]>('/api/codes/', params)
   },
 
   async getCode(id: number): Promise<AlarmCode> {

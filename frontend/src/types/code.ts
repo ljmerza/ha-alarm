@@ -1,25 +1,26 @@
 import type { AlarmStateType } from '@/lib/constants'
 
-export type CodeType = 'permanent' | 'temporary' | 'one_time' | 'duress'
+export type CodeType = 'permanent' | 'temporary' | 'one_time' | 'service'
 
 export interface AlarmCode {
   id: number
   userId: string
-  userName: string // Denormalized for display
-  name: string // e.g., "Main Code", "Dog Walker"
+  userDisplayName: string
+  label: string
   codeType: CodeType
+  pinLength: number
   isActive: boolean
-  validFrom: string | null // ISO datetime
-  validTo: string | null // ISO datetime
-  daysOfWeek: number[] | null // 0=Sunday, 6=Saturday
-  timeWindowStart: string | null // HH:MM
-  timeWindowEnd: string | null // HH:MM
   maxUses: number | null
-  currentUseCount: number
-  allowedStates: AlarmStateType[] // States this code can arm to
-  lastUsed: string | null
+  usesCount: number
+  startAt: string | null // ISO datetime
+  endAt: string | null // ISO datetime
+  daysOfWeek: number | null // bitmask
+  windowStart: string | null // HH:MM
+  windowEnd: string | null // HH:MM
+  allowedStates: AlarmStateType[]
+  lastUsedAt: string | null
   createdAt: string
-  modifiedAt: string
+  updatedAt: string
 }
 
 export interface CodeUsage {
@@ -36,30 +37,23 @@ export interface CodeUsage {
 
 export interface CreateCodeRequest {
   userId: string
-  name: string
+  label?: string
   code: string // Plain text, will be hashed on server
-  codeType: CodeType
-  isActive?: boolean
-  validFrom?: string
-  validTo?: string
-  daysOfWeek?: number[]
-  timeWindowStart?: string
-  timeWindowEnd?: string
-  maxUses?: number
+  codeType?: CodeType
+  startAt?: string | null
+  endAt?: string | null
   allowedStates?: AlarmStateType[]
+  reauthPassword: string
 }
 
 export interface UpdateCodeRequest {
-  name?: string
   code?: string // Only if changing the code
+  label?: string
   isActive?: boolean
-  validFrom?: string | null
-  validTo?: string | null
-  daysOfWeek?: number[] | null
-  timeWindowStart?: string | null
-  timeWindowEnd?: string | null
-  maxUses?: number | null
+  startAt?: string | null
+  endAt?: string | null
   allowedStates?: AlarmStateType[]
+  reauthPassword: string
 }
 
 export interface ValidateCodeRequest {

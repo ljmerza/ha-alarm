@@ -1,8 +1,9 @@
-import { Menu, Bell, User, LogOut, Moon, Sun, Monitor } from 'lucide-react'
+import { Menu, Bell, User, LogOut, Moon, Sun, Monitor, House } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuthStore, useUIStore, useAlarmStore } from '@/stores'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { AlarmStateLabels, AlarmState } from '@/lib/constants'
+import { AlarmStateLabels, AlarmState, Routes } from '@/lib/constants'
 
 export function Header() {
   const { user, logout } = useAuthStore()
@@ -32,7 +33,7 @@ export function Header() {
   const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 md:px-6">
+    <header className="flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
       {/* Mobile Menu Button */}
       {isMobile && (
         <Button variant="ghost" size="icon" onClick={toggleSidebar}>
@@ -40,6 +41,14 @@ export function Header() {
           <span className="sr-only">Toggle menu</span>
         </Button>
       )}
+
+      {/* Home */}
+      <Button asChild variant="ghost" size="icon">
+        <Link to={Routes.HOME} aria-label="Home">
+          <House className="h-5 w-5" />
+          <span className="sr-only">Home</span>
+        </Link>
+      </Button>
 
       {/* Alarm Status Badge */}
       <div className="flex items-center gap-2">

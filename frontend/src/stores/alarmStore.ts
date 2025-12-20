@@ -2,19 +2,19 @@ import { create } from 'zustand'
 import type {
   AlarmStateSnapshot,
   AlarmSettingsProfile,
-  Zone,
+  Sensor,
   AlarmEvent,
   WebSocketStatus,
   CountdownPayload,
 } from '@/types'
 import type { AlarmStateType } from '@/lib/constants'
-import { alarmService, zonesService, wsManager } from '@/services'
+import { alarmService, sensorsService, wsManager } from '@/services'
 
 interface AlarmStore {
   // State
   alarmState: AlarmStateSnapshot | null
   settings: AlarmSettingsProfile | null
-  zones: Zone[]
+  sensors: Sensor[]
   recentEvents: AlarmEvent[]
   wsStatus: WebSocketStatus
   countdown: CountdownPayload | null
@@ -31,13 +31,11 @@ interface AlarmStore {
   // Actions
   fetchAlarmState: () => Promise<void>
   fetchSettings: () => Promise<void>
-  fetchZones: () => Promise<void>
+  fetchSensors: () => Promise<void>
   fetchRecentEvents: () => Promise<void>
   arm: (targetState: AlarmStateType, code?: string) => Promise<void>
   disarm: (code: string) => Promise<void>
   cancelArming: (code?: string) => Promise<void>
-  bypassZone: (zoneId: number, until?: string) => Promise<void>
-  unbypassZone: (zoneId: number) => Promise<void>
 
   // WebSocket
   connectWebSocket: () => void
@@ -46,7 +44,6 @@ interface AlarmStore {
 
   // Internal updates from WebSocket
   updateAlarmState: (state: AlarmStateSnapshot) => void
-  updateZone: (zone: Zone) => void
   addEvent: (event: AlarmEvent) => void
   setCountdown: (countdown: CountdownPayload | null) => void
 
@@ -56,7 +53,7 @@ interface AlarmStore {
 export const useAlarmStore = create<AlarmStore>((set, get) => ({
   alarmState: null,
   settings: null,
-  zones: [],
+  sensors: [],
   recentEvents: [],
   wsStatus: 'disconnected',
   countdown: null,
@@ -88,13 +85,13 @@ export const useAlarmStore = create<AlarmStore>((set, get) => ({
     }
   },
 
-  fetchZones: async () => {
+  fetchSensors: async () => {
     try {
-      const zones = await zonesService.getZones()
-      set({ zones })
+      const sensors = await sensorsService.getSensors()
+      set({ sensors })
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to fetch zones',
+        error: error instanceof Error ? error.message : 'Failed to fetch sensors',
       })
     }
   },
@@ -152,32 +149,6 @@ export const useAlarmStore = create<AlarmStore>((set, get) => ({
     }
   },
 
-  bypassZone: async (zoneId: number, until?: string) => {
-    try {
-      const zone = await zonesService.bypassZone(zoneId, until)
-      const zones = get().zones.map((z) => (z.id === zoneId ? zone : z))
-      set({ zones })
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to bypass zone',
-      })
-      throw error
-    }
-  },
-
-  unbypassZone: async (zoneId: number) => {
-    try {
-      const zone = await zonesService.unbypassZone(zoneId)
-      const zones = get().zones.map((z) => (z.id === zoneId ? zone : z))
-      set({ zones })
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to unbypass zone',
-      })
-      throw error
-    }
-  },
-
   connectWebSocket: () => {
     wsManager.connect()
 
@@ -192,9 +163,6 @@ export const useAlarmStore = create<AlarmStore>((set, get) => ({
           break
         case 'event':
           get().addEvent((message.payload as { event: AlarmEvent }).event)
-          break
-        case 'zone_update':
-          get().updateZone((message.payload as { zone: Zone }).zone)
           break
         case 'countdown':
           get().setCountdown(message.payload as CountdownPayload)
@@ -213,11 +181,6 @@ export const useAlarmStore = create<AlarmStore>((set, get) => ({
 
   updateAlarmState: (state: AlarmStateSnapshot) => {
     set({ alarmState: state })
-  },
-
-  updateZone: (zone: Zone) => {
-    const zones = get().zones.map((z) => (z.id === zone.id ? zone : z))
-    set({ zones })
   },
 
   addEvent: (event: AlarmEvent) => {

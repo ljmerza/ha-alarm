@@ -10,7 +10,8 @@ import {
   SetupWizardPage,
   ImportSensorsPage,
   DashboardPage,
-  ZonesPage,
+  RulesPage,
+  RulesTestPage,
   CodesPage,
   EventsPage,
   SettingsPage,
@@ -106,7 +107,8 @@ function AppContent() {
         <Route path={AppRoutes.SETUP} element={<SetupWizardPage />} />
         <Route path={AppRoutes.SETUP_IMPORT_SENSORS} element={<ImportSensorsPage />} />
         <Route path={AppRoutes.HOME} element={<DashboardPage />} />
-        <Route path={AppRoutes.ZONES} element={<ZonesPage />} />
+        <Route path={AppRoutes.RULES} element={<RulesPage />} />
+        <Route path={AppRoutes.RULES_TEST} element={<RulesTestPage />} />
         <Route path={AppRoutes.CODES} element={<CodesPage />} />
         <Route path={AppRoutes.EVENTS} element={<EventsPage />} />
         <Route path={AppRoutes.SETTINGS} element={<SettingsPage />} />

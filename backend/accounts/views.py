@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 
 from alarm import services as alarm_services
-from alarm.models import AlarmSettingsProfile, AlarmState, AlarmStateSnapshot, AlarmSystem, Sensor, Zone
+from alarm.models import AlarmSettingsProfile, AlarmState, AlarmStateSnapshot, AlarmSystem, Sensor
 
 from .models import Role, User, UserCode, UserRoleAssignment
 from .serializers import (
@@ -20,8 +20,17 @@ from .serializers import (
     OnboardingSerializer,
     UserCodeCreateSerializer,
     UserCodeSerializer,
+    UserCodeUpdateSerializer,
     UserSerializer,
 )
+
+
+def _is_admin(user: User) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff:
+        return True
+    return user.role_assignments.filter(role__slug="admin").exists()
 
 
 def _ensure_active_settings_profile() -> AlarmSettingsProfile:
@@ -192,12 +201,19 @@ class CurrentUserView(APIView):
         return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
 
 
+class UsersView(APIView):
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+        users = User.objects.order_by("email")
+        return Response(UserSerializer(users, many=True).data, status=status.HTTP_200_OK)
+
+
 class SetupStatusView(APIView):
     def get(self, request):
         has_active_settings_profile = AlarmSettingsProfile.objects.filter(is_active=True).exists()
         has_alarm_snapshot = AlarmStateSnapshot.objects.exists()
         has_alarm_code = UserCode.objects.filter(user=request.user, is_active=True).exists()
-        has_zones = Zone.objects.exists()
         has_sensors = Sensor.objects.exists()
         home_assistant_connected = False
 
@@ -211,7 +227,6 @@ class SetupStatusView(APIView):
                     "has_active_settings_profile": has_active_settings_profile,
                     "has_alarm_snapshot": has_alarm_snapshot,
                     "has_alarm_code": has_alarm_code,
-                    "has_zones": has_zones,
                     "has_sensors": has_sensors,
                     "home_assistant_connected": home_assistant_connected,
                 },
@@ -222,11 +237,88 @@ class SetupStatusView(APIView):
 
 class CodesView(APIView):
     def get(self, request):
-        codes = UserCode.objects.filter(user=request.user).order_by("-created_at")
+        target_user = request.user
+        user_id = request.query_params.get("user_id")
+        if user_id and _is_admin(request.user):
+            target_user = User.objects.filter(id=user_id).first()
+            if not target_user:
+                return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        codes = (
+            UserCode.objects.select_related("user")
+            .prefetch_related("allowed_states")
+            .filter(user=target_user)
+            .order_by("-created_at")
+        )
         return Response(UserCodeSerializer(codes, many=True).data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        serializer = UserCodeCreateSerializer(data=request.data, context={"request": request})
+        if not _is_admin(request.user):
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+
+        reauth_password = request.data.get("reauth_password")
+        if not reauth_password:
+            return Response({"detail": "Re-authentication required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not request.user.check_password(reauth_password):
+            return Response({"detail": "Re-authentication failed."}, status=status.HTTP_403_FORBIDDEN)
+
+        user_id = request.data.get("user_id") or str(request.user.id)
+        target_user = User.objects.filter(id=user_id).first()
+        if not target_user:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserCodeCreateSerializer(
+            data=request.data,
+            context={"request": request, "target_user": target_user},
+        )
         serializer.is_valid(raise_exception=True)
         code = serializer.save()
+        code = (
+            UserCode.objects.select_related("user")
+            .prefetch_related("allowed_states")
+            .get(id=code.id)
+        )
         return Response(UserCodeSerializer(code).data, status=status.HTTP_201_CREATED)
+
+
+class CodeDetailView(APIView):
+    def get(self, request, code_id: int):
+        code = (
+            UserCode.objects.select_related("user")
+            .prefetch_related("allowed_states")
+            .filter(id=code_id)
+            .first()
+        )
+        if not code:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not _is_admin(request.user) and code.user_id != request.user.id:
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+        return Response(UserCodeSerializer(code).data, status=status.HTTP_200_OK)
+
+    def patch(self, request, code_id: int):
+        code = (
+            UserCode.objects.select_related("user")
+            .prefetch_related("allowed_states")
+            .filter(id=code_id)
+            .first()
+        )
+        if not code:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not _is_admin(request.user):
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+
+        reauth_password = request.data.get("reauth_password")
+        if not reauth_password:
+            return Response({"detail": "Re-authentication required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not request.user.check_password(reauth_password):
+            return Response({"detail": "Re-authentication failed."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = UserCodeUpdateSerializer(instance=code, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        code = serializer.save()
+        code = (
+            UserCode.objects.select_related("user")
+            .prefetch_related("allowed_states")
+            .get(id=code.id)
+        )
+        return Response(UserCodeSerializer(code).data, status=status.HTTP_200_OK)

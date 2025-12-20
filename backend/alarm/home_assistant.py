@@ -173,3 +173,38 @@ def list_entities(*, timeout_seconds: float = 5.0) -> list[dict[str, Any]]:
             }
         )
     return entities
+
+
+def call_service(
+    *,
+    domain: str,
+    service: str,
+    target: dict[str, Any] | None = None,
+    service_data: dict[str, Any] | None = None,
+    timeout_seconds: float = 5.0,
+) -> None:
+    base_url = (settings.HOME_ASSISTANT_URL or "").strip()
+    token = (settings.HOME_ASSISTANT_TOKEN or "").strip()
+    if not base_url or not token:
+        raise RuntimeError("Home Assistant is not configured.")
+
+    payload: dict[str, Any] = {}
+    if target:
+        payload["target"] = target
+    if service_data:
+        payload["service_data"] = service_data
+
+    client = _get_client()
+    if client is not None:
+        try:
+            client.call_service(domain, service, **payload)
+            return
+        except Exception:
+            # Fall back to raw HTTP below.
+            pass
+
+    url = _build_url(f"/api/services/{domain}/{service}")
+    request = Request(url, headers=_ha_headers(token), method="POST", data=json.dumps(payload).encode("utf-8"))
+    with urlopen(request, timeout=timeout_seconds) as response:
+        if not (200 <= response.status < 300):
+            raise RuntimeError(f"Unexpected status: {response.status}")

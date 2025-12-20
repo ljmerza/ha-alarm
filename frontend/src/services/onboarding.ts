@@ -11,7 +11,6 @@ export interface SetupStatus {
     hasActiveSettingsProfile: boolean
     hasAlarmSnapshot: boolean
     hasAlarmCode: boolean
-    hasZones: boolean
     hasSensors: boolean
     homeAssistantConnected: boolean
   }

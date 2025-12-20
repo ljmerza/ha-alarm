@@ -29,6 +29,7 @@ export const AlarmState = {
   ARMED_AWAY: 'armed_away',
   ARMED_NIGHT: 'armed_night',
   ARMED_VACATION: 'armed_vacation',
+  ARMED_CUSTOM_BYPASS: 'armed_custom_bypass',
   PENDING: 'pending',
   TRIGGERED: 'triggered',
 } as const
@@ -43,6 +44,7 @@ export const AlarmStateLabels: Record<AlarmStateType, string> = {
   [AlarmState.ARMED_AWAY]: 'Armed Away',
   [AlarmState.ARMED_NIGHT]: 'Armed Night',
   [AlarmState.ARMED_VACATION]: 'Armed Vacation',
+  [AlarmState.ARMED_CUSTOM_BYPASS]: 'Armed (Custom Bypass)',
   [AlarmState.PENDING]: 'Entry Delay',
   [AlarmState.TRIGGERED]: 'TRIGGERED',
 }
@@ -55,6 +57,7 @@ export const AlarmStateColors: Record<AlarmStateType, string> = {
   [AlarmState.ARMED_AWAY]: 'bg-alarm-armed-away',
   [AlarmState.ARMED_NIGHT]: 'bg-alarm-armed-night',
   [AlarmState.ARMED_VACATION]: 'bg-alarm-armed-vacation',
+  [AlarmState.ARMED_CUSTOM_BYPASS]: 'bg-alarm-armed-away',
   [AlarmState.PENDING]: 'bg-alarm-pending',
   [AlarmState.TRIGGERED]: 'bg-alarm-triggered',
 }
@@ -91,7 +94,8 @@ export const Routes = {
   SETUP: '/setup',
   SETUP_IMPORT_SENSORS: '/setup/import-sensors',
   DASHBOARD: '/dashboard',
-  ZONES: '/zones',
+  RULES: '/rules',
+  RULES_TEST: '/rules/test',
   CODES: '/codes',
   EVENTS: '/events',
   SETTINGS: '/settings',

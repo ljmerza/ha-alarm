@@ -16,7 +16,6 @@ from .models import (
     AlarmState,
     AlarmStateSnapshot,
     Sensor,
-    Zone,
 )
 
 
@@ -83,16 +82,6 @@ def _resolve_timing(profile: AlarmSettingsProfile, target_state: str) -> TimingS
     return timing
 
 
-def _apply_zone_delay(timing: TimingSnapshot, zone: Zone | None) -> TimingSnapshot:
-    if zone and zone.entry_delay_override is not None:
-        return TimingSnapshot(
-            delay_time=zone.entry_delay_override,
-            arming_time=timing.arming_time,
-            trigger_time=timing.trigger_time,
-        )
-    return timing
-
-
 def _event_type_for_state(state: str) -> str:
     if state == AlarmState.DISARMED:
         return AlarmEventType.DISARMED
@@ -112,7 +101,6 @@ def _record_state_event(
     state_to: str,
     user=None,
     code=None,
-    zone: Zone | None = None,
     sensor: Sensor | None = None,
     metadata: dict | None = None,
     timestamp=None,
@@ -124,7 +112,6 @@ def _record_state_event(
         timestamp=timestamp or timezone.now(),
         user=user,
         code=code,
-        zone=zone,
         sensor=sensor,
         metadata=metadata or {},
     )
@@ -136,7 +123,6 @@ def _record_sensor_event(sensor: Sensor, timestamp=None) -> AlarmEvent:
         state_from=None,
         state_to=None,
         timestamp=timestamp or timezone.now(),
-        zone=sensor.zone,
         sensor=sensor,
         metadata={"is_entry_point": sensor.is_entry_point},
     )
@@ -150,7 +136,6 @@ def record_failed_code(*, user, action: str, metadata: dict | None = None, times
         timestamp=timestamp or timezone.now(),
         user=user,
         code=None,
-        zone=None,
         sensor=None,
         metadata={"action": action, **(metadata or {})},
     )
@@ -169,7 +154,6 @@ def record_code_used(*, user, code: UserCode, action: str, metadata: dict | None
         timestamp=now,
         user=user,
         code=code,
-        zone=None,
         sensor=None,
         metadata={"action": action, **(metadata or {})},
     )
@@ -182,9 +166,15 @@ def validate_user_code(*, user, raw_code: str) -> UserCode:
     if len(raw_code) < 4 or len(raw_code) > 8:
         raise InvalidCodeError("Invalid code.")
 
+    now = timezone.now()
     candidates = UserCode.objects.filter(user=user, is_active=True)
     for candidate in candidates:
         if check_password(raw_code, candidate.code_hash):
+            if candidate.code_type == UserCode.CodeType.TEMPORARY:
+                if candidate.start_at and now < candidate.start_at:
+                    raise InvalidCodeError("Code is not active yet.")
+                if candidate.end_at and now > candidate.end_at:
+                    raise InvalidCodeError("Code has expired.")
             return candidate
     raise InvalidCodeError("Invalid code.")
 
@@ -214,7 +204,6 @@ def _transition(
     now,
     user=None,
     code=None,
-    zone: Zone | None = None,
     sensor: Sensor | None = None,
     reason: str = "",
     exit_at=None,
@@ -243,7 +232,6 @@ def _transition(
         state_to=state_to,
         user=user,
         code=code,
-        zone=zone,
         sensor=sensor,
         metadata=metadata,
         timestamp=now,
@@ -348,7 +336,6 @@ def sensor_triggered(*, sensor: Sensor, user=None, reason: str = "sensor_trigger
         )
 
     if sensor.is_entry_point:
-        timing = _apply_zone_delay(timing, sensor.zone)
         snapshot.timing_snapshot = timing.as_dict()
         snapshot.save(update_fields=["timing_snapshot"])
         exit_at = now + timedelta(seconds=timing.delay_time)
@@ -361,7 +348,6 @@ def sensor_triggered(*, sensor: Sensor, user=None, reason: str = "sensor_trigger
             exit_at=exit_at,
             update_previous=False,
             sensor=sensor,
-            zone=sensor.zone,
         )
 
     exit_at = now + timedelta(seconds=timing.trigger_time)
@@ -374,7 +360,6 @@ def sensor_triggered(*, sensor: Sensor, user=None, reason: str = "sensor_trigger
         exit_at=exit_at,
         update_previous=False,
         sensor=sensor,
-        zone=sensor.zone,
     )
 
 
@@ -449,3 +434,35 @@ def get_current_snapshot(*, process_timers: bool = True) -> AlarmStateSnapshot:
         return timer_expired(reason="read_state")
     with transaction.atomic():
         return _get_snapshot_for_update()
+
+
+@transaction.atomic
+def trigger(*, user=None, reason: str = "trigger") -> AlarmStateSnapshot:
+    snapshot = _get_snapshot_for_update()
+    now = timezone.now()
+    if snapshot.current_state == AlarmState.TRIGGERED:
+        return snapshot
+    if snapshot.current_state == AlarmState.DISARMED:
+        raise TransitionError("Cannot trigger alarm while disarmed.")
+
+    _set_previous_armed_state(snapshot)
+    snapshot.save(update_fields=["previous_state"])
+
+    timing = _base_timing(snapshot.settings_profile)
+    if snapshot.timing_snapshot:
+        timing = TimingSnapshot(
+            delay_time=snapshot.timing_snapshot.get("delay_time", timing.delay_time),
+            arming_time=snapshot.timing_snapshot.get("arming_time", timing.arming_time),
+            trigger_time=snapshot.timing_snapshot.get("trigger_time", timing.trigger_time),
+        )
+
+    exit_at = now + timedelta(seconds=timing.trigger_time)
+    return _transition(
+        snapshot=snapshot,
+        state_to=AlarmState.TRIGGERED,
+        now=now,
+        user=user,
+        reason=reason,
+        exit_at=exit_at,
+        update_previous=False,
+    )

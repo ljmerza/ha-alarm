@@ -6,7 +6,7 @@ export function useAlarm() {
   const {
     alarmState,
     settings,
-    zones,
+    sensors,
     recentEvents,
     wsStatus,
     countdown,
@@ -14,13 +14,11 @@ export function useAlarm() {
     error,
     fetchAlarmState,
     fetchSettings,
-    fetchZones,
+    fetchSensors,
     fetchRecentEvents,
     arm,
     disarm,
     cancelArming,
-    bypassZone,
-    unbypassZone,
     connectWebSocket,
     disconnectWebSocket,
     clearError,
@@ -30,14 +28,14 @@ export function useAlarm() {
   useEffect(() => {
     fetchAlarmState()
     fetchSettings()
-    fetchZones()
+    fetchSensors()
     fetchRecentEvents()
     connectWebSocket()
 
     return () => {
       disconnectWebSocket()
     }
-  }, [fetchAlarmState, fetchSettings, fetchZones, fetchRecentEvents, connectWebSocket, disconnectWebSocket])
+  }, [fetchAlarmState, fetchSettings, fetchSensors, fetchRecentEvents, connectWebSocket, disconnectWebSocket])
 
   // Computed values
   const currentState = alarmState?.currentState ?? AlarmState.DISARMED
@@ -86,19 +84,12 @@ export function useAlarm() {
   ]
 
   // Check for open sensors that might prevent arming
-  const openSensors = zones
-    .flatMap((zone) => zone.sensors)
-    .filter((sensor) => sensor.currentState === 'open' && sensor.isActive)
+  const openSensors = sensors.filter((sensor) => sensor.currentState === 'open' && sensor.isActive)
 
   // "Down/unavailable" sensors: configured but status can't be read
-  const unknownSensors = zones
-    .flatMap((zone) => zone.sensors)
-    .filter(
-      (sensor) =>
-        sensor.isActive &&
-        sensor.entityId &&
-        sensor.currentState === 'unknown'
-    )
+  const unknownSensors = sensors.filter(
+    (sensor) => sensor.isActive && sensor.entityId && sensor.currentState === 'unknown'
+  )
 
   const canArm = openSensors.length === 0 || settings?.sensorBehavior?.forceArmEnabled
 
@@ -107,7 +98,7 @@ export function useAlarm() {
     alarmState,
     currentState,
     settings,
-    zones,
+    sensors,
     recentEvents,
     wsStatus,
     countdown,
@@ -134,16 +125,14 @@ export function useAlarm() {
     armVacation,
     disarm,
     cancelArming,
-    bypassZone,
-    unbypassZone,
     clearError,
 
     // Refresh
     refresh: useCallback(() => {
       fetchAlarmState()
-      fetchZones()
+      fetchSensors()
       fetchRecentEvents()
-    }, [fetchAlarmState, fetchZones, fetchRecentEvents]),
+    }, [fetchAlarmState, fetchSensors, fetchRecentEvents]),
   }
 }
 

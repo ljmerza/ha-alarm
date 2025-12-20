@@ -32,13 +32,7 @@ class AlarmEventAdmin(admin.ModelAdmin):
     list_filter = ("event_type", "state_to")
 
 
-@admin.register(models.Zone)
-class ZoneAdmin(admin.ModelAdmin):
-    list_display = ("name", "is_active")
-    list_filter = ("is_active",)
-
-
 @admin.register(models.Sensor)
 class SensorAdmin(admin.ModelAdmin):
-    list_display = ("name", "zone", "is_active", "is_entry_point")
+    list_display = ("name", "is_active", "is_entry_point")
     list_filter = ("is_active", "is_entry_point")

@@ -14,7 +14,7 @@ function formatTimestamp(value?: string | null): string {
 }
 
 export function SystemStatusCard() {
-  const { wsStatus, alarmState, isLoading, fetchAlarmState, fetchZones, fetchRecentEvents } =
+  const { wsStatus, alarmState, isLoading, fetchAlarmState, fetchSensors, fetchRecentEvents } =
     useAlarmStore()
   const [ha, setHa] = useState<{
     configured: boolean
@@ -77,7 +77,7 @@ export function SystemStatusCard() {
             disabled={isLoading}
             onClick={() => {
               fetchAlarmState()
-              fetchZones()
+              fetchSensors()
               fetchRecentEvents()
               homeAssistantService
                 .getStatus()

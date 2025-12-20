@@ -96,37 +96,19 @@ class AlarmStateSnapshot(models.Model):
         return f"{self.current_state} ({self.entered_at})"
 
 
-class Zone(models.Model):
-    name = models.CharField(max_length=150, unique=True)
-    is_active = models.BooleanField(default=True)
-    entry_delay_override = models.PositiveIntegerField(null=True, blank=True)
-    active_states = models.JSONField(default=list, blank=True)
-
-    class Meta:
-        ordering = ["name"]
-        indexes = [models.Index(fields=["is_active"])]
-
-    def __str__(self) -> str:  # pragma: no cover - simple representation
-        return self.name
-
-
 class Sensor(models.Model):
     name = models.CharField(max_length=150)
-    zone = models.ForeignKey(Zone, on_delete=models.PROTECT, related_name="sensors")
     entity_id = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
     is_entry_point = models.BooleanField(default=False)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["zone", "name"], name="sensors_zone_name"),
-        ]
         indexes = [
-            models.Index(fields=["zone", "is_active"]),
+            models.Index(fields=["is_active"]),
         ]
 
     def __str__(self) -> str:  # pragma: no cover - simple representation
-        return f"{self.zone_id}:{self.name}"
+        return self.name
 
 
 class AlarmEvent(models.Model):
@@ -147,13 +129,6 @@ class AlarmEvent(models.Model):
     )
     code = models.ForeignKey(
         "accounts.UserCode",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="alarm_events",
-    )
-    zone = models.ForeignKey(
-        Zone,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -183,3 +158,146 @@ class AlarmEvent(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover - simple representation
         return f"{self.event_type}:{self.timestamp}"
+
+
+class EntityTag(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+    color = models.CharField(max_length=16, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return self.name
+
+
+class Entity(models.Model):
+    entity_id = models.CharField(max_length=255, unique=True)
+    domain = models.CharField(max_length=64, db_index=True)
+    name = models.CharField(max_length=255)
+    device_class = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    last_state = models.CharField(max_length=255, null=True, blank=True)
+    last_changed = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_seen = models.DateTimeField(null=True, blank=True, db_index=True)
+    attributes = models.JSONField(default=dict, blank=True)
+    source = models.CharField(max_length=64, blank=True)
+    tags = models.ManyToManyField(EntityTag, related_name="entities", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["domain"]),
+        ]
+        ordering = ["entity_id"]
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return self.entity_id
+
+
+class RuleKind(models.TextChoices):
+    TRIGGER = "trigger", "Trigger"
+    DISARM = "disarm", "Disarm"
+    ARM = "arm", "Arm"
+    SUPPRESS = "suppress", "Suppress"
+    ESCALATE = "escalate", "Escalate"
+
+
+class Rule(models.Model):
+    name = models.CharField(max_length=150)
+    kind = models.CharField(max_length=32, choices=RuleKind.choices, db_index=True)
+    enabled = models.BooleanField(default=True, db_index=True)
+    priority = models.IntegerField(default=0, db_index=True)
+    schema_version = models.PositiveIntegerField(default=1)
+    definition = models.JSONField(default=dict, blank=True)
+    cooldown_seconds = models.PositiveIntegerField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="alarm_rules_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["enabled", "kind", "-priority"]),
+        ]
+        ordering = ["-priority", "id"]
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return f"{self.kind}:{self.name}"
+
+
+class RuleEntityRef(models.Model):
+    rule = models.ForeignKey(Rule, on_delete=models.CASCADE, related_name="entity_refs")
+    entity = models.ForeignKey(Entity, on_delete=models.CASCADE, related_name="rule_refs")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["rule", "entity"], name="rule_entity_ref_unique"),
+        ]
+        indexes = [
+            models.Index(fields=["entity", "rule"]),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return f"{self.rule_id}:{self.entity_id}"
+
+
+class RuleRuntimeStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    SATISFIED = "satisfied", "Satisfied"
+    COOLDOWN = "cooldown", "Cooldown"
+
+
+class RuleRuntimeState(models.Model):
+    rule = models.ForeignKey(Rule, on_delete=models.CASCADE, related_name="runtime_states")
+    node_id = models.CharField(max_length=128)
+    status = models.CharField(
+        max_length=32, choices=RuleRuntimeStatus.choices, default=RuleRuntimeStatus.PENDING
+    )
+    became_true_at = models.DateTimeField(null=True, blank=True)
+    scheduled_for = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_evaluated_at = models.DateTimeField(null=True, blank=True)
+    last_fired_at = models.DateTimeField(null=True, blank=True)
+    fingerprint = models.CharField(max_length=64, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["rule", "node_id"], name="rule_node_unique"),
+        ]
+        indexes = [
+            models.Index(fields=["rule", "node_id"]),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return f"{self.rule_id}:{self.node_id}"
+
+
+class RuleActionLog(models.Model):
+    rule = models.ForeignKey(Rule, null=True, blank=True, on_delete=models.SET_NULL)
+    entity = models.ForeignKey(Entity, null=True, blank=True, on_delete=models.SET_NULL)
+    fired_at = models.DateTimeField()
+    kind = models.CharField(max_length=32, choices=RuleKind.choices, blank=True)
+    actions = models.JSONField(default=list, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    trace = models.JSONField(default=dict, blank=True)
+    alarm_state_before = models.CharField(max_length=32, blank=True)
+    alarm_state_after = models.CharField(max_length=32, blank=True)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["fired_at"]),
+            models.Index(fields=["kind", "fired_at"]),
+        ]
+        ordering = ["-fired_at", "-id"]
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return f"{self.fired_at}:{self.kind}"

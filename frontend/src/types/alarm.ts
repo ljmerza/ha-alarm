@@ -56,23 +56,10 @@ export interface SensorBehavior {
   forceArmEnabled: boolean
 }
 
-// Zone
-export interface Zone {
-  id: number
-  name: string
-  isActive: boolean
-  entryDelayOverride: number | null
-  activeStates: AlarmStateType[]
-  sensors: Sensor[]
-  isBypassed: boolean
-  bypassedUntil: string | null
-}
-
 // Sensor
 export interface Sensor {
   id: number
   name: string
-  zoneId: number
   entityId: string | null // HA entity ID
   isActive: boolean
   isEntryPoint: boolean
@@ -89,7 +76,6 @@ export interface AlarmEvent {
   timestamp: string
   userId: string | null
   codeId: number | null
-  zoneId: number | null
   sensorId: number | null
   metadata: Record<string, unknown>
 }
@@ -106,9 +92,9 @@ export interface DisarmRequest {
 
 // WebSocket Messages
 export interface AlarmWebSocketMessage {
-  type: 'alarm_state' | 'event' | 'zone_update' | 'countdown' | 'health'
+  type: 'alarm_state' | 'event' | 'countdown' | 'health'
   timestamp: string
-  payload: AlarmStatePayload | AlarmEventPayload | ZoneUpdatePayload | CountdownPayload
+  payload: AlarmStatePayload | AlarmEventPayload | CountdownPayload
   sequence: number
 }
 
@@ -123,10 +109,6 @@ export interface AlarmStatePayload {
 
 export interface AlarmEventPayload {
   event: AlarmEvent
-}
-
-export interface ZoneUpdatePayload {
-  zone: Zone
 }
 
 export interface CountdownPayload {

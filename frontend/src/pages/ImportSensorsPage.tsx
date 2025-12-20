@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Search, Shield, MapPin, Loader2 } from 'lucide-react'
+import { Check, Search, Shield, Loader2 } from 'lucide-react'
 import { Routes } from '@/lib/constants'
-import { homeAssistantService, zonesService } from '@/services'
+import { homeAssistantService, sensorsService } from '@/services'
 import { useAlarmStore } from '@/stores'
 import type { HomeAssistantEntity } from '@/services/homeAssistant'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,35 +14,57 @@ function defaultEntryPointFromDeviceClass(deviceClass?: string | null): boolean 
   return ['door', 'window', 'garage_door'].includes(deviceClass)
 }
 
+type ViewMode = 'available' | 'imported' | 'all'
+
 export function ImportSensorsPage() {
-  const { zones, fetchZones, fetchAlarmState } = useAlarmStore()
+  const entrySensorHelp =
+    'Entry sensors start the entry delay (Pending) when triggered while the alarm is armed. Turn off for instant trigger.'
+  const entrySensorSuggestedHelp =
+    'Suggested based on the Home Assistant device class (door/window/garage_door).'
+
+  const { sensors, fetchSensors, fetchAlarmState } = useAlarmStore()
   const [query, setQuery] = useState('')
   const [entities, setEntities] = useState<HomeAssistantEntity[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<{ count: number; names: string[] } | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [nameOverrides, setNameOverrides] = useState<Record<string, string>>({})
   const [entryOverrides, setEntryOverrides] = useState<Record<string, boolean>>({})
-  const [zoneId, setZoneId] = useState<number | 'unassigned' | 'new'>('unassigned')
-  const [newZoneName, setNewZoneName] = useState('')
+  const [entryHelpOpenFor, setEntryHelpOpenFor] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitProgress, setSubmitProgress] = useState<{ current: number; total: number } | null>(
+    null
+  )
+  const [viewMode, setViewMode] = useState<ViewMode>('available')
+  const [visibleCount, setVisibleCount] = useState(50)
+
+  const toDomId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_')
 
   const existingEntityIds = useMemo(() => {
     const ids = new Set<string>()
-    for (const zone of zones) {
-      for (const sensor of zone.sensors || []) {
-        if (sensor.entityId) ids.add(sensor.entityId)
-      }
+    for (const sensor of sensors) {
+      if (sensor.entityId) ids.add(sensor.entityId)
     }
     return ids
-  }, [zones])
+  }, [sensors])
+
+  const importedByEntityId = useMemo(() => {
+    const map = new Map<string, { sensorId: number }>()
+    for (const sensor of sensors) {
+      if (!sensor.entityId) continue
+      map.set(sensor.entityId, { sensorId: sensor.id })
+    }
+    return map
+  }, [sensors])
 
   useEffect(() => {
     let mounted = true
     setIsLoading(true)
     setError(null)
+    setSuccess(null)
 
-    Promise.all([fetchZones(), homeAssistantService.getStatus()])
+    Promise.all([fetchSensors(), homeAssistantService.getStatus()])
       .then(([, status]) => {
         if (!mounted) return
         if (!status.configured) {
@@ -72,15 +94,38 @@ export function ImportSensorsPage() {
     return () => {
       mounted = false
     }
-  }, [fetchZones])
+  }, [fetchSensors])
+
+  useEffect(() => {
+    setVisibleCount(50)
+  }, [query, viewMode])
+
+  const allSensorEntities = useMemo(() => {
+    return entities.filter((e) => e.domain.endsWith('sensor'))
+  }, [entities])
+
+  const importedSensorEntities = useMemo(() => {
+    return allSensorEntities.filter((e) => existingEntityIds.has(e.entityId))
+  }, [allSensorEntities, existingEntityIds])
+
+  const availableSensorEntities = useMemo(() => {
+    return allSensorEntities.filter((e) => !existingEntityIds.has(e.entityId))
+  }, [allSensorEntities, existingEntityIds])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return entities
-      .filter((e) => e.domain === 'binary_sensor')
+    const base =
+      viewMode === 'available'
+        ? availableSensorEntities
+        : viewMode === 'imported'
+          ? importedSensorEntities
+          : allSensorEntities
+    return base
       .filter((e) => !q || e.entityId.toLowerCase().includes(q) || e.name.toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [entities, query])
+  }, [availableSensorEntities, importedSensorEntities, allSensorEntities, query, viewMode])
+
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 
   const selectedEntities = useMemo(() => {
     return filtered.filter((e) => selected[e.entityId])
@@ -88,45 +133,32 @@ export function ImportSensorsPage() {
 
   const submit = async () => {
     setError(null)
+    setSuccess(null)
     setIsSubmitting(true)
+    setSubmitProgress({ current: 0, total: selectedEntities.length })
+    const importedNames: string[] = []
     try {
-      const targetZoneId = await (async () => {
-        if (zoneId === 'unassigned') return undefined
-        if (zoneId !== 'new') return zoneId
-        const trimmed = newZoneName.trim()
-        if (!trimmed) {
-          throw new Error('Zone name is required.')
-        }
-        const created = await zonesService.createZone({
-          name: trimmed,
-          isActive: true,
-          activeStates: [],
-        })
-        return created.id
-      })()
-
+      let index = 0
       for (const entity of selectedEntities) {
+        index += 1
+        setSubmitProgress({ current: index, total: selectedEntities.length })
         const name = (nameOverrides[entity.entityId] || entity.name || entity.entityId).trim()
         const isEntryPoint =
-          entryOverrides[entity.entityId] ??
-          defaultEntryPointFromDeviceClass(entity.deviceClass)
+          entryOverrides[entity.entityId] ?? defaultEntryPointFromDeviceClass(entity.deviceClass)
 
-        await zonesService.createSensor({
+        await sensorsService.createSensor({
           name,
           entityId: entity.entityId,
           isActive: true,
           isEntryPoint,
-          ...(targetZoneId ? { zoneId: targetZoneId } : {}),
         })
+        importedNames.push(name || entity.entityId)
       }
 
-      await fetchZones()
+      await fetchSensors()
       await fetchAlarmState()
       setSelected({})
-      if (zoneId === 'new') {
-        setZoneId('unassigned')
-        setNewZoneName('')
-      }
+      setSuccess({ count: importedNames.length, names: importedNames.slice(0, 5) })
     } catch (err) {
       if (err && typeof err === 'object') {
         const anyErr = err as { message?: string; detail?: string }
@@ -136,6 +168,7 @@ export function ImportSensorsPage() {
       }
     } finally {
       setIsSubmitting(false)
+      setSubmitProgress(null)
     }
   }
 
@@ -145,7 +178,8 @@ export function ImportSensorsPage() {
         <div>
           <h1 className="text-3xl font-bold">Import Sensors</h1>
           <p className="text-muted-foreground">
-            Select Home Assistant <code>binary_sensor</code> entities to use in the alarm.
+            Add Home Assistant <code>sensor</code> and <code>binary_sensor</code> entities to your
+            alarm system.
           </p>
         </div>
         <Button asChild variant="outline">
@@ -158,88 +192,78 @@ export function ImportSensorsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Options</CardTitle>
-          <CardDescription>Zones are optional; imported sensors will go to “Unassigned” by default.</CardDescription>
+          <CardTitle>Search</CardTitle>
+          <CardDescription>Select which entities to import.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <CardContent className="flex flex-col gap-3">
           <div className="relative w-full md:max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
-              placeholder="Search entities…"
+              placeholder="Search by name or entity_id…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-            <label className="text-sm text-muted-foreground">Zone</label>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              value={zoneId}
-              onChange={(e) =>
-                setZoneId(
-                  e.target.value === 'unassigned'
-                    ? 'unassigned'
-                    : e.target.value === 'new'
-                      ? 'new'
-                      : Number(e.target.value)
-                )
-              }
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">View</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'available' ? 'secondary' : 'outline'}
+              onClick={() => setViewMode('available')}
             >
-              <option value="unassigned">Unassigned (default)</option>
-              <option value="new">New zone…</option>
-              {zones.map((z) => (
-                <option key={z.id} value={z.id}>
-                  {z.name}
-                </option>
-              ))}
-            </select>
+              Available ({availableSensorEntities.length})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'imported' ? 'secondary' : 'outline'}
+              onClick={() => setViewMode('imported')}
+            >
+              Imported ({importedSensorEntities.length})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'all' ? 'secondary' : 'outline'}
+              onClick={() => setViewMode('all')}
+            >
+              All ({allSensorEntities.length})
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {zoneId === 'new' && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">New Zone</CardTitle>
-            <CardDescription>Create a zone and import selected sensors into it.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="newZoneName">
-              Zone name
-            </label>
-            <Input
-              id="newZoneName"
-              placeholder="Perimeter"
-              value={newZoneName}
-              onChange={(e) => setNewZoneName(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </CardContent>
-        </Card>
+      {success && (
+        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4" />
+            Imported {success.count} sensor{success.count === 1 ? '' : 's'}.
+          </div>
+          {success.names.length > 0 && (
+            <div className="mt-1 text-xs text-green-800">
+              Examples: {success.names.join(', ')}
+              {success.count > success.names.length ? '…' : ''}
+            </div>
+          )}
+        </div>
       )}
 
       {error && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
           {error}
         </div>
       )}
 
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle>Entities</CardTitle>
-            <Button
-              disabled={isSubmitting || selectedEntities.length === 0}
-              onClick={submit}
-            >
-              {isSubmitting ? <Loader2 className="animate-spin" /> : <Check />}
-              Import {selectedEntities.length || ''}
-            </Button>
-          </div>
-          <CardDescription>Only <code>binary_sensor</code> entities are shown for MVP.</CardDescription>
+        <CardHeader>
+          <CardTitle>Entities</CardTitle>
+          <CardDescription>
+            Select the sensors you want the alarm to react to. “Entry sensor” means it starts the
+            entry delay (Pending) instead of triggering instantly.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -251,18 +275,17 @@ export function ImportSensorsPage() {
             <div className="text-sm text-muted-foreground">No entities found.</div>
           ) : (
             <div className="space-y-2">
-              {filtered.map((entity) => {
+              {visible.map((entity) => {
                 const already = existingEntityIds.has(entity.entityId)
                 const isChecked = !!selected[entity.entityId]
                 const suggestedEntry = defaultEntryPointFromDeviceClass(entity.deviceClass)
-                const entry =
-                  entryOverrides[entity.entityId] ?? suggestedEntry
+                const entry = entryOverrides[entity.entityId] ?? suggestedEntry
+                const helpId = `entry-sensor-help-${toDomId(entity.entityId)}`
+                const isHelpOpen = entryHelpOpenFor === entity.entityId
+                const imported = importedByEntityId.get(entity.entityId)
 
                 return (
-                  <div
-                    key={entity.entityId}
-                    className="rounded-md border p-3"
-                  >
+                  <div key={entity.entityId} className="rounded-md border p-3">
                     <div className="flex items-start justify-between gap-3">
                       <label className="flex items-start gap-3">
                         <input
@@ -270,12 +293,20 @@ export function ImportSensorsPage() {
                           className="mt-1"
                           checked={isChecked}
                           disabled={already}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const nextChecked = e.target.checked
                             setSelected((prev) => ({
                               ...prev,
-                              [entity.entityId]: e.target.checked,
+                              [entity.entityId]: nextChecked,
                             }))
-                          }
+                            if (nextChecked) {
+                              setEntryOverrides((prev) =>
+                                prev[entity.entityId] === undefined
+                                  ? { ...prev, [entity.entityId]: suggestedEntry }
+                                  : prev
+                              )
+                            }
+                          }}
                         />
                         <div>
                           <div className="font-medium">{entity.name}</div>
@@ -286,7 +317,7 @@ export function ImportSensorsPage() {
                           </div>
                           {already && (
                             <div className="mt-1 text-xs text-muted-foreground">
-                              Already imported
+                              Already imported{imported?.sensorId ? ` • ID: ${imported.sensorId}` : ''}
                             </div>
                           )}
                         </div>
@@ -307,12 +338,28 @@ export function ImportSensorsPage() {
                             }
                           />
                         </div>
+
                         <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">Entry sensor</label>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-xs text-muted-foreground">Entry sensor</label>
+                            <button
+                              type="button"
+                              className="text-xs text-muted-foreground underline"
+                              aria-controls={helpId}
+                              aria-expanded={isHelpOpen}
+                              onClick={() =>
+                                setEntryHelpOpenFor((prev) =>
+                                  prev === entity.entityId ? null : entity.entityId
+                                )
+                              }
+                            >
+                              Help
+                            </button>
+                          </div>
+                          <label className="flex items-center gap-2 text-sm">
                             <input
                               type="checkbox"
-                              checked={entry}
+                              checked={!!entry}
                               onChange={(e) =>
                                 setEntryOverrides((prev) => ({
                                   ...prev,
@@ -320,22 +367,56 @@ export function ImportSensorsPage() {
                                 }))
                               }
                             />
-                            <span className="text-sm">
-                              {suggestedEntry ? 'Suggested' : 'Off'}
-                            </span>
-                          </div>
+                            {suggestedEntry ? 'On (suggested)' : 'Off'}
+                          </label>
+                          {isHelpOpen && (
+                            <div id={helpId} className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                              <div>{entrySensorHelp}</div>
+                              <div className="mt-1">{entrySensorSuggestedHelp}</div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
                   </div>
                 )
               })}
+
+              {visibleCount < filtered.length && (
+                <div className="pt-2">
+                  <Button type="button" variant="outline" onClick={() => setVisibleCount((c) => c + 50)}>
+                    Load more
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-muted-foreground">
+          Selected: {selectedEntities.length}
+          {submitProgress ? ` • Importing ${submitProgress.current}/${submitProgress.total}` : ''}
+        </div>
+        <Button
+          type="button"
+          disabled={isSubmitting || selectedEntities.length === 0}
+          onClick={submit}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Importing…
+            </>
+          ) : (
+            'Import selected'
+          )}
+        </Button>
+      </div>
     </div>
   )
 }
 
 export default ImportSensorsPage
+

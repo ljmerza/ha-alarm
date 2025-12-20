@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import {
   Shield,
-  MapPin,
+  Gavel,
   Key,
   Clock,
   Settings,
@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 
 const navItems = [
   { path: Routes.HOME, label: 'Dashboard', icon: Shield },
-  { path: Routes.ZONES, label: 'Zones', icon: MapPin },
+  { path: Routes.RULES, label: 'Rules', icon: Gavel },
   { path: Routes.CODES, label: 'Codes', icon: Key },
   { path: Routes.EVENTS, label: 'Events', icon: Clock },
   { path: Routes.SETTINGS, label: 'Settings', icon: Settings },

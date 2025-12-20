@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from alarm import services
-from alarm.models import AlarmSettingsProfile, AlarmState, AlarmStateSnapshot, Sensor, Zone
+from alarm.models import AlarmSettingsProfile, AlarmState, AlarmStateSnapshot, Sensor
 
 
 class AlarmTransitionTests(TestCase):
@@ -21,16 +21,13 @@ class AlarmTransitionTests(TestCase):
             trigger_time=20,
             code_arm_required=True,
         )
-        self.zone = Zone.objects.create(name="Front", is_active=True, entry_delay_override=15)
         self.entry_sensor = Sensor.objects.create(
             name="Front Door",
-            zone=self.zone,
             is_active=True,
             is_entry_point=True,
         )
         self.motion_sensor = Sensor.objects.create(
             name="Living Motion",
-            zone=self.zone,
             is_active=True,
             is_entry_point=False,
         )

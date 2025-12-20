@@ -2,21 +2,25 @@ from __future__ import annotations
 
 from django.core.paginator import Paginator
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import services
 from . import home_assistant
-from .models import AlarmEvent, AlarmSettingsProfile, AlarmState, Sensor, Zone
+from . import rules_engine
+from .models import AlarmEvent, AlarmSettingsProfile, AlarmState, Entity, Rule, Sensor
 from .serializers import (
     AlarmEventSerializer,
     AlarmSettingsProfileSerializer,
     AlarmStateSnapshotSerializer,
+    EntitySerializer,
+    RuleSerializer,
+    RuleUpsertSerializer,
     SensorSerializer,
     SensorCreateSerializer,
-    ZoneSerializer,
-    ZoneCreateSerializer,
+    SensorUpdateSerializer,
 )
 
 
@@ -49,6 +53,141 @@ class HomeAssistantEntitiesView(APIView):
         return Response({"data": entities}, status=status.HTTP_200_OK)
 
 
+class EntitiesView(APIView):
+    def get(self, request):
+        queryset = Entity.objects.all().order_by("entity_id")
+        return Response(EntitySerializer(queryset, many=True).data, status=status.HTTP_200_OK)
+
+
+class EntitySyncView(APIView):
+    def post(self, request):
+        status_obj = home_assistant.get_status()
+        if not status_obj.configured:
+            return Response(
+                {"detail": "Home Assistant is not configured."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not status_obj.reachable:
+            return Response(
+                {"detail": "Home Assistant is not reachable.", "error": status_obj.error},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        now = timezone.now()
+        imported = 0
+        updated = 0
+        for item in home_assistant.list_entities():
+            entity_id = item.get("entity_id")
+            domain = item.get("domain")
+            name = item.get("name")
+            if not isinstance(entity_id, str) or "." not in entity_id:
+                continue
+            if not isinstance(domain, str) or not domain:
+                domain = entity_id.split(".", 1)[0]
+            if not isinstance(name, str) or not name:
+                name = entity_id
+
+            last_changed_raw = item.get("last_changed")
+            last_changed = parse_datetime(last_changed_raw) if isinstance(last_changed_raw, str) else None
+
+            defaults = {
+                "domain": domain,
+                "name": name,
+                "device_class": item.get("device_class") if isinstance(item.get("device_class"), str) else None,
+                "last_state": item.get("state") if isinstance(item.get("state"), str) else None,
+                "last_changed": last_changed,
+                "last_seen": now,
+                "attributes": {
+                    "unit_of_measurement": item.get("unit_of_measurement"),
+                },
+                "source": "home_assistant",
+            }
+
+            obj, created = Entity.objects.update_or_create(entity_id=entity_id, defaults=defaults)
+            imported += 1 if created else 0
+            updated += 0 if created else 1
+
+        return Response(
+            {"imported": imported, "updated": updated, "timestamp": now},
+            status=status.HTTP_200_OK,
+        )
+
+
+class RulesView(APIView):
+    def get(self, request):
+        kind = request.query_params.get("kind")
+        enabled = request.query_params.get("enabled")
+        queryset = Rule.objects.all()
+        if kind:
+            queryset = queryset.filter(kind=kind)
+        if enabled in {"true", "false"}:
+            queryset = queryset.filter(enabled=(enabled == "true"))
+        queryset = queryset.order_by("-priority", "id")
+        return Response(RuleSerializer(queryset, many=True).data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = RuleUpsertSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        rule = serializer.save(created_by=request.user)
+        return Response(RuleSerializer(rule).data, status=status.HTTP_201_CREATED)
+
+
+class RuleDetailView(APIView):
+    def get(self, request, rule_id: int):
+        rule = Rule.objects.get(pk=rule_id)
+        return Response(RuleSerializer(rule).data, status=status.HTTP_200_OK)
+
+    def patch(self, request, rule_id: int):
+        rule = Rule.objects.get(pk=rule_id)
+        serializer = RuleUpsertSerializer(rule, data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        rule = serializer.save()
+        return Response(RuleSerializer(rule).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, rule_id: int):
+        Rule.objects.filter(pk=rule_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RuleRunView(APIView):
+    def post(self, request):
+        result = rules_engine.run_rules(actor_user=request.user)
+        return Response(result.as_dict(), status=status.HTTP_200_OK)
+
+
+class RuleSimulateView(APIView):
+    def post(self, request):
+        entity_states = request.data.get("entity_states") if isinstance(request.data, dict) else None
+        if entity_states is None:
+            entity_states = {}
+        if not isinstance(entity_states, dict):
+            return Response({"detail": "entity_states must be an object."}, status=status.HTTP_400_BAD_REQUEST)
+
+        cleaned: dict[str, str] = {}
+        for key, value in entity_states.items():
+            if not isinstance(key, str):
+                continue
+            if not isinstance(value, str):
+                continue
+            entity_id = key.strip()
+            if not entity_id:
+                continue
+            cleaned[entity_id] = value
+
+        assume_for_seconds = request.data.get("assume_for_seconds") if isinstance(request.data, dict) else None
+        if assume_for_seconds is not None and not isinstance(assume_for_seconds, int):
+            return Response(
+                {"detail": "assume_for_seconds must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = rules_engine.simulate_rules(
+            entity_states=cleaned,
+            assume_for_seconds=assume_for_seconds,
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
 class AlarmSettingsView(APIView):
     def get(self, request):
         profile = AlarmSettingsProfile.objects.filter(is_active=True).first()
@@ -60,39 +199,34 @@ class AlarmSettingsView(APIView):
         return Response(AlarmSettingsProfileSerializer(profile).data)
 
 
-class ZonesView(APIView):
-    def get(self, request):
-        zones = Zone.objects.prefetch_related("sensors").all()
-        return Response(ZoneSerializer(zones, many=True).data)
-
-    def post(self, request):
-        serializer = ZoneCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        zone = serializer.save()
-        return Response(ZoneSerializer(zone).data, status=status.HTTP_201_CREATED)
-
-
 class SensorsView(APIView):
     def get(self, request):
-        sensors = Sensor.objects.select_related("zone").all()
+        sensors = Sensor.objects.all()
         return Response(SensorSerializer(sensors, many=True).data)
 
     def post(self, request):
-        if hasattr(request.data, "copy"):
-            data = request.data.copy()
-        else:
-            data = dict(request.data)
-
-        if not data.get("zone") and data.get("zone_id"):
-            data["zone"] = data.get("zone_id")
-
-        if not data.get("zone"):
-            zone, _ = Zone.objects.get_or_create(name="Unassigned", defaults={"is_active": True})
-            data["zone"] = zone.id
-        serializer = SensorCreateSerializer(data=data)
+        serializer = SensorCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         sensor = serializer.save()
         return Response(SensorSerializer(sensor).data, status=status.HTTP_201_CREATED)
+
+
+class SensorDetailView(APIView):
+    def get(self, request, sensor_id: int):
+        sensor = Sensor.objects.get(pk=sensor_id)
+        return Response(SensorSerializer(sensor).data)
+
+    def patch(self, request, sensor_id: int):
+        sensor = Sensor.objects.get(pk=sensor_id)
+        serializer = SensorUpdateSerializer(sensor, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        sensor = serializer.save()
+        return Response(SensorSerializer(sensor).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, sensor_id: int):
+        sensor = Sensor.objects.get(pk=sensor_id)
+        sensor.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AlarmEventsView(APIView):
@@ -151,14 +285,14 @@ class ArmAlarmView(APIView):
                 )
             try:
                 code_obj = services.validate_user_code(user=request.user, raw_code=raw_code)
-            except services.InvalidCodeError:
+            except services.InvalidCodeError as exc:
                 services.record_failed_code(
                     user=request.user,
                     action="arm",
                     metadata={"target_state": target_state},
                 )
                 return Response(
-                    {"detail": "Invalid code."},
+                    {"detail": str(exc) or "Invalid code."},
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
@@ -188,10 +322,10 @@ class DisarmAlarmView(APIView):
             )
         try:
             code_obj = services.validate_user_code(user=request.user, raw_code=raw_code)
-        except services.InvalidCodeError:
+        except services.InvalidCodeError as exc:
             services.record_failed_code(user=request.user, action="disarm")
             return Response(
-                {"detail": "Invalid code."},
+                {"detail": str(exc) or "Invalid code."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
