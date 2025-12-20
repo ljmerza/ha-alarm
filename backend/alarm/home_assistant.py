@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _import_client():
@@ -60,31 +63,49 @@ def get_status(*, timeout_seconds: float = 2.0) -> HomeAssistantStatus:
     base_url = (settings.HOME_ASSISTANT_URL or "").strip()
     token = (settings.HOME_ASSISTANT_TOKEN or "").strip()
     if not base_url or not token:
+        logger.info("HA status: not configured (missing url/token)")
         return HomeAssistantStatus(configured=False, reachable=False, base_url=base_url or None)
 
     client = _get_client()
     if client is not None:
         try:
+            logger.debug("HA status: checking via homeassistant_api client.get_config() (base_url=%s)", base_url)
             client.get_config()
+            logger.info("HA status: reachable via client (base_url=%s)", base_url)
             return HomeAssistantStatus(configured=True, reachable=True, base_url=base_url)
         except Exception as exc:
             client_error = str(exc)
+            logger.warning(
+                "HA status: client check failed; falling back to raw HTTP (base_url=%s, error=%s: %s)",
+                base_url,
+                exc.__class__.__name__,
+                client_error,
+            )
     else:
         client_error = None
 
     url = _build_url("/api/")
     request = Request(url, headers=_ha_headers(token), method="GET")
     try:
+        logger.debug("HA status: checking via raw HTTP GET %s (timeout=%ss)", url, timeout_seconds)
         with urlopen(request, timeout=timeout_seconds) as response:
             content_type = (response.headers.get("Content-Type") or "").lower()
             if 200 <= response.status < 300:
                 if "application/json" not in content_type:
+                    body_preview = response.read(256).decode("utf-8", errors="replace")
+                    logger.warning(
+                        "HA status: unexpected content-type (status=%s, content_type=%s, body_preview=%r)",
+                        response.status,
+                        content_type or "unknown",
+                        body_preview,
+                    )
                     return HomeAssistantStatus(
                         configured=True,
                         reachable=False,
                         base_url=base_url,
                         error=f"Unexpected content-type from Home Assistant: {content_type or 'unknown'}",
                     )
+                logger.info("HA status: reachable via raw HTTP (base_url=%s)", base_url)
                 return HomeAssistantStatus(configured=True, reachable=True, base_url=base_url)
             return HomeAssistantStatus(
                 configured=True,
@@ -93,6 +114,21 @@ def get_status(*, timeout_seconds: float = 2.0) -> HomeAssistantStatus:
                 error=f"Unexpected status: {response.status}",
             )
     except HTTPError as exc:
+        try:
+            content_type = (exc.headers.get("Content-Type") or "").lower()
+        except Exception:
+            content_type = ""
+        try:
+            body_preview = exc.read(256).decode("utf-8", errors="replace")
+        except Exception:
+            body_preview = ""
+        logger.warning(
+            "HA status: HTTPError (base_url=%s, status=%s, content_type=%s, body_preview=%r)",
+            base_url,
+            exc.code,
+            content_type or "unknown",
+            body_preview,
+        )
         return HomeAssistantStatus(
             configured=True,
             reachable=False,
@@ -100,6 +136,7 @@ def get_status(*, timeout_seconds: float = 2.0) -> HomeAssistantStatus:
             error=f"HTTP {exc.code}",
         )
     except URLError as exc:
+        logger.warning("HA status: URLError (base_url=%s, reason=%s)", base_url, exc.reason)
         return HomeAssistantStatus(
             configured=True,
             reachable=False,
@@ -107,6 +144,7 @@ def get_status(*, timeout_seconds: float = 2.0) -> HomeAssistantStatus:
             error=str(exc.reason),
         )
     except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("HA status: unexpected error (base_url=%s)", base_url)
         return HomeAssistantStatus(
             configured=True,
             reachable=False,
@@ -119,13 +157,16 @@ def list_entities(*, timeout_seconds: float = 5.0) -> list[dict[str, Any]]:
     base_url = (settings.HOME_ASSISTANT_URL or "").strip()
     token = (settings.HOME_ASSISTANT_TOKEN or "").strip()
     if not base_url or not token:
+        logger.info("HA entities: not configured (missing url/token)")
         return []
 
     client = _get_client()
     if client is not None:
         try:
+            logger.debug("HA entities: fetching via homeassistant_api client.get_states() (base_url=%s)", base_url)
             states = client.get_states()
         except Exception:
+            logger.warning("HA entities: client.get_states() failed; falling back to raw HTTP (base_url=%s)", base_url)
             # Fall back to raw HTTP below.
             states = None
         if states is not None:
@@ -156,20 +197,43 @@ def list_entities(*, timeout_seconds: float = 5.0) -> list[dict[str, Any]]:
     url = _build_url("/api/states")
     request = Request(url, headers=_ha_headers(token), method="GET")
     try:
+        logger.debug("HA entities: fetching via raw HTTP GET %s (timeout=%ss)", url, timeout_seconds)
         with urlopen(request, timeout=timeout_seconds) as response:
             content_type = (response.headers.get("Content-Type") or "").lower()
             raw = response.read().decode("utf-8")
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as exc:
+            logger.warning(
+                "HA entities: JSON decode error (content_type=%s, body_preview=%r)",
+                content_type or "unknown",
+                raw[:256],
+            )
             raise RuntimeError(
                 f"Home Assistant returned non-JSON response (content-type: {content_type or 'unknown'})."
             ) from exc
     except HTTPError as exc:
+        try:
+            content_type = (exc.headers.get("Content-Type") or "").lower()
+        except Exception:
+            content_type = ""
+        try:
+            body_preview = exc.read(256).decode("utf-8", errors="replace")
+        except Exception:
+            body_preview = ""
+        logger.warning(
+            "HA entities: HTTPError (base_url=%s, status=%s, content_type=%s, body_preview=%r)",
+            base_url,
+            exc.code,
+            content_type or "unknown",
+            body_preview,
+        )
         raise RuntimeError(f"Home Assistant returned HTTP {exc.code}.") from exc
     except URLError as exc:
+        logger.warning("HA entities: URLError (base_url=%s, reason=%s)", base_url, exc.reason)
         raise RuntimeError(f"Home Assistant request failed: {exc.reason}") from exc
     if not isinstance(payload, list):
+        logger.warning("HA entities: unexpected payload type %s", type(payload).__name__)
         return []
 
     entities: list[dict[str, Any]] = []

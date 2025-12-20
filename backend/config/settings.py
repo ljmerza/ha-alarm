@@ -158,5 +158,22 @@ LOGGING = {
     "handlers": {
         "console": {"class": "logging.StreamHandler"},
     },
-    "root": {"handlers": ["console"], "level": "INFO"},
+    "root": {"handlers": ["console"], "level": env.str("LOG_LEVEL", default="INFO").upper()},
+    "loggers": {
+        "alarm.home_assistant": {
+            "handlers": ["console"],
+            "level": env.str("HA_LOG_LEVEL", default=env.str("LOG_LEVEL", default="INFO")).upper(),
+            "propagate": False,
+        },
+        "alarm.middleware": {
+            "handlers": ["console"],
+            "level": env.str("WS_LOG_LEVEL", default=env.str("LOG_LEVEL", default="INFO")).upper(),
+            "propagate": False,
+        },
+        "alarm.consumers": {
+            "handlers": ["console"],
+            "level": env.str("WS_LOG_LEVEL", default=env.str("LOG_LEVEL", default="INFO")).upper(),
+            "propagate": False,
+        },
+    },
 }

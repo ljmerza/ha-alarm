@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { Routes } from '@/lib/constants'
 import { useAuthStore, useSetupStore } from '@/stores'
+import { Spinner } from '@/components/ui/spinner'
 
 interface SetupGateProps {
   children: React.ReactNode
@@ -21,11 +22,7 @@ export function SetupGate({ children }: SetupGateProps) {
   if (!isAuthenticated) return <>{children}</>
 
   if (isLoading && !status) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    )
+    return <Spinner fullscreen size="lg" />
   }
 
   if (status?.setupRequired) {

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Routes as AppRoutes } from '@/lib/constants'
 import { useUIStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { AppShell, ProtectedRoute, SetupGate } from '@/components/layout'
+import { Spinner } from '@/components/ui/spinner'
 import {
   LoginPage,
   OnboardingPage,
@@ -59,11 +60,7 @@ function AppContent() {
   }, [checkStatus])
 
   if (onboardingLoading || onboardingRequired === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    )
+    return <Spinner fullscreen size="lg" />
   }
 
   return (

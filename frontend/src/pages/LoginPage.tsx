@@ -9,6 +9,7 @@ import { Routes } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -100,9 +101,9 @@ export function LoginPage() {
             </div>
 
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
+              <Alert variant="error" layout="inline">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
 
             <Button type="submit" className="w-full" disabled={isLoading}>

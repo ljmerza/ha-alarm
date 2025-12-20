@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores'
 import { Routes } from '@/lib/constants'
+import { Spinner } from '@/components/ui/spinner'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -13,11 +14,7 @@ export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps)
 
   // Show loading state while checking auth
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    )
+    return <Spinner fullscreen size="lg" />
   }
 
   // Redirect to login if not authenticated
