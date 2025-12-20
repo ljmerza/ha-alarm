@@ -50,7 +50,13 @@ class HomeAssistantEntitiesView(APIView):
                 {"detail": "Home Assistant is not reachable.", "error": status_obj.error},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        entities = home_assistant.list_entities()
+        try:
+            entities = home_assistant.list_entities()
+        except Exception as exc:
+            return Response(
+                {"detail": "Failed to fetch Home Assistant entities.", "error": str(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response({"data": entities}, status=status.HTTP_200_OK)
 
 
@@ -77,7 +83,14 @@ class EntitySyncView(APIView):
         now = timezone.now()
         imported = 0
         updated = 0
-        for item in home_assistant.list_entities():
+        try:
+            items = home_assistant.list_entities()
+        except Exception as exc:
+            return Response(
+                {"detail": "Failed to fetch Home Assistant entities.", "error": str(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        for item in items:
             entity_id = item.get("entity_id")
             domain = item.get("domain")
             name = item.get("name")

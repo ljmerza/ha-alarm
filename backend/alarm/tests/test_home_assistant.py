@@ -59,3 +59,18 @@ class HomeAssistantStatusApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["data"]), 1)
         self.assertEqual(response.data["data"][0]["entity_id"], "binary_sensor.front_door")
+
+    @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
+    @patch("alarm.home_assistant.get_status")
+    @patch("alarm.home_assistant.list_entities", side_effect=RuntimeError("boom"))
+    def test_entities_handles_list_failure(self, mock_list_entities, mock_get_status):
+        class _Status:
+            configured = True
+            reachable = True
+            error = None
+
+        mock_get_status.return_value = _Status()
+        url = reverse("ha-entities")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.data["detail"], "Failed to fetch Home Assistant entities.")

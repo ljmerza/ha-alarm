@@ -108,9 +108,9 @@ class SensorSerializer(serializers.ModelSerializer):
         return False
 
 class AlarmEventSerializer(serializers.ModelSerializer):
-    user_id = serializers.UUIDField(source="user_id", allow_null=True, read_only=True)
-    code_id = serializers.IntegerField(source="code_id", allow_null=True, read_only=True)
-    sensor_id = serializers.IntegerField(source="sensor_id", allow_null=True, read_only=True)
+    user_id = serializers.UUIDField(allow_null=True, read_only=True)
+    code_id = serializers.IntegerField(allow_null=True, read_only=True)
+    sensor_id = serializers.IntegerField(allow_null=True, read_only=True)
 
     class Meta:
         model = AlarmEvent
