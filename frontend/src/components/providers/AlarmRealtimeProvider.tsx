@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAuthStore } from '@/stores'
 import { wsManager } from '@/services'
 import type { AlarmEvent, AlarmStateSnapshot, CountdownPayload, AlarmWebSocketMessage, WebSocketStatus } from '@/types'
 import { queryKeys } from '@/types'
+import { useAuthSessionQuery } from '@/hooks/useAuthQueries'
 
 let unsubscribeMessages: (() => void) | null = null
 let unsubscribeStatus: (() => void) | null = null
@@ -16,7 +16,8 @@ function upsertRecentEvent(prev: AlarmEvent[] | undefined, nextEvent: AlarmEvent
 
 export function AlarmRealtimeProvider() {
   const queryClient = useQueryClient()
-  const { isAuthenticated } = useAuthStore()
+  const sessionQuery = useAuthSessionQuery()
+  const isAuthenticated = sessionQuery.data.isAuthenticated
 
   useEffect(() => {
     if (!isAuthenticated) {

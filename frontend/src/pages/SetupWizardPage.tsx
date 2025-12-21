@@ -8,7 +8,9 @@ import { Routes, AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
 import type { AlarmStateType } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/errors'
 import { codesService } from '@/services'
-import { useAuthStore, useSetupStore } from '@/stores'
+import { useAuth } from '@/hooks/useAuth'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -38,8 +40,8 @@ type FormData = z.infer<typeof schema>
 
 export function SetupWizardPage() {
   const navigate = useNavigate()
-  const { checkStatus } = useSetupStore()
-  const { user, logout } = useAuthStore()
+  const queryClient = useQueryClient()
+  const { user, logout } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [allowedStates, setAllowedStates] = useState<AlarmStateType[]>(ARMABLE_STATES)
 
@@ -70,7 +72,7 @@ export function SetupWizardPage() {
         allowedStates,
         reauthPassword: data.reauthPassword,
       })
-      await checkStatus()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.setupStatus })
       navigate(Routes.HOME, { replace: true })
     } catch (err) {
       setError(getErrorMessage(err) || 'Failed to create code')
@@ -88,11 +90,16 @@ export function SetupWizardPage() {
         <div className="space-y-4">
           <Alert variant="warning" layout="banner">
             <AlertTitle>Admin action required</AlertTitle>
-            <AlertDescription>
+          <AlertDescription>
               An admin must create your alarm code before you can use the system.
             </AlertDescription>
           </Alert>
-          <Button type="button" className="w-full" variant="secondary" onClick={() => logout()}>
+          <Button
+            type="button"
+            className="w-full"
+            variant="secondary"
+            onClick={() => logout()}
+          >
             Log out
           </Button>
         </div>

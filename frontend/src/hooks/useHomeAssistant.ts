@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { homeAssistantService } from '@/services'
-import { useAuthStore } from '@/stores'
 import { queryKeys } from '@/types'
+import { useAuthSessionQuery } from '@/hooks/useAuthQueries'
 
 export function useHomeAssistantStatus() {
-  const { isAuthenticated } = useAuthStore()
+  const session = useAuthSessionQuery()
+  const isAuthenticated = session.data.isAuthenticated
   return useQuery({
     queryKey: queryKeys.homeAssistant.status,
     queryFn: homeAssistantService.getStatus,
@@ -13,7 +14,8 @@ export function useHomeAssistantStatus() {
 }
 
 export function useHomeAssistantEntities() {
-  const { isAuthenticated } = useAuthStore()
+  const session = useAuthSessionQuery()
+  const isAuthenticated = session.data.isAuthenticated
   const statusQuery = useHomeAssistantStatus()
   const enabled = !!isAuthenticated && !!statusQuery.data?.configured && !!statusQuery.data?.reachable
 
@@ -25,4 +27,3 @@ export function useHomeAssistantEntities() {
 }
 
 export default useHomeAssistantStatus
-

@@ -1,17 +1,22 @@
 import { Menu, Bell, User, LogOut, Moon, Sun, Monitor, House } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useAuthStore, useUIStore } from '@/stores'
+import { useUIStore } from '@/stores'
 import { alarmService } from '@/services'
 import { queryKeys } from '@/types'
-import { useWebSocketStatus } from '@/hooks'
+import { useWebSocketStatus } from '@/hooks/useWebSocketStatus'
+import { useAuthSessionQuery, useCurrentUserQuery, useLogoutMutation } from '@/hooks/useAuthQueries'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { IconButton } from '@/components/ui/icon-button'
 import { AlarmStateLabels, AlarmState, Routes } from '@/lib/constants'
 
 export function Header() {
-  const { user, logout, isAuthenticated } = useAuthStore()
+  const logoutMutation = useLogoutMutation()
+  const sessionQuery = useAuthSessionQuery()
+  const currentUserQuery = useCurrentUserQuery()
+  const user = currentUserQuery.data ?? null
+  const isAuthenticated = sessionQuery.data.isAuthenticated
   const { toggleSidebar, theme, setTheme, isMobile } = useUIStore()
 
   const alarmStateQuery = useQuery({
@@ -97,7 +102,7 @@ export function Header() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => logout()}
+            onClick={() => logoutMutation.mutateAsync()}
             title="Logout"
           >
             <LogOut className="h-5 w-5" />

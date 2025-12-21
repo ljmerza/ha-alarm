@@ -9,6 +9,7 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
+IS_TESTING = "test" in sys.argv
 
 env_file = env.str("ENV_FILE", default=None)
 for candidate in [env_file, BASE_DIR / ".env", BASE_DIR.parent / ".env"]:
@@ -153,9 +154,14 @@ HOME_ASSISTANT_TOKEN = (
     env.str("HOME_ASSISTANT_TOKEN", default="").strip()
     or env.str("HA_TOKEN", default="").strip()
 )
-if "test" in sys.argv and not env.bool("ALLOW_HOME_ASSISTANT_IN_TESTS", default=False):
+ALLOW_HOME_ASSISTANT_IN_TESTS = env.bool("ALLOW_HOME_ASSISTANT_IN_TESTS", default=False)
+if IS_TESTING and not ALLOW_HOME_ASSISTANT_IN_TESTS:
     HOME_ASSISTANT_URL = ""
     HOME_ASSISTANT_TOKEN = ""
+
+HA_LOG_LEVEL = env.str("HA_LOG_LEVEL", default=env.str("LOG_LEVEL", default="INFO")).upper()
+if IS_TESTING and not ALLOW_HOME_ASSISTANT_IN_TESTS:
+    HA_LOG_LEVEL = "WARNING"
 
 LOGGING = {
     "version": 1,
@@ -167,7 +173,7 @@ LOGGING = {
     "loggers": {
         "alarm.home_assistant": {
             "handlers": ["console"],
-            "level": env.str("HA_LOG_LEVEL", default=env.str("LOG_LEVEL", default="INFO")).upper(),
+            "level": HA_LOG_LEVEL,
             "propagate": False,
         },
         "alarm.middleware": {

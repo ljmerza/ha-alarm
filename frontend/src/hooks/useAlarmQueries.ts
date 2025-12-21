@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { alarmService, sensorsService } from '@/services'
-import { useAuthStore } from '@/stores'
 import { queryKeys } from '@/types'
+import { useAuthSessionQuery } from '@/hooks/useAuthQueries'
 
 export function useAlarmStateQuery() {
-  const { isAuthenticated } = useAuthStore()
+  const session = useAuthSessionQuery()
+  const isAuthenticated = session.data.isAuthenticated
   return useQuery({
     queryKey: queryKeys.alarm.state,
     queryFn: alarmService.getState,
@@ -13,7 +14,8 @@ export function useAlarmStateQuery() {
 }
 
 export function useAlarmSettingsQuery() {
-  const { isAuthenticated } = useAuthStore()
+  const session = useAuthSessionQuery()
+  const isAuthenticated = session.data.isAuthenticated
   return useQuery({
     queryKey: queryKeys.alarm.settings,
     queryFn: alarmService.getSettings,
@@ -22,7 +24,8 @@ export function useAlarmSettingsQuery() {
 }
 
 export function useSensorsQuery() {
-  const { isAuthenticated } = useAuthStore()
+  const session = useAuthSessionQuery()
+  const isAuthenticated = session.data.isAuthenticated
   return useQuery({
     queryKey: queryKeys.sensors.all,
     queryFn: sensorsService.getSensors,
@@ -31,11 +34,11 @@ export function useSensorsQuery() {
 }
 
 export function useRecentEventsQuery(limit = 10) {
-  const { isAuthenticated } = useAuthStore()
+  const session = useAuthSessionQuery()
+  const isAuthenticated = session.data.isAuthenticated
   return useQuery({
     queryKey: queryKeys.events.recent,
     queryFn: () => alarmService.getRecentEvents(limit),
     enabled: isAuthenticated,
   })
 }
-

@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { useAuthStore } from '@/stores'
+import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
 import { AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
 import type { AlarmStateType, UserRoleType } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/errors'
 import type { AlarmCode, UpdateCodeRequest, User } from '@/types'
-import { useCodesQuery, useCreateCodeMutation, useUpdateCodeMutation, useUsersQuery } from '@/hooks'
+import { useCodesQuery, useCreateCodeMutation, useUpdateCodeMutation, useUsersQuery } from '@/hooks/useCodesQueries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,7 +81,8 @@ export function CodesPage() {
 }
 
 function CodesPageContent() {
-  const { user } = useAuthStore()
+  const currentUserQuery = useCurrentUserQuery()
+  const user = currentUserQuery.data ?? null
   const isAdmin = isAdminRole(user?.role)
 
   const [selectedUserId, setSelectedUserId] = useState<string>('')

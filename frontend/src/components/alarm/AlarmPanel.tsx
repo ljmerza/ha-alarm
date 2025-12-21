@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { useAlarm } from '@/hooks'
+import { useAlarm } from '@/hooks/useAlarm'
 import { type AlarmStateType } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { useAuthStore } from '@/stores'
 import { Routes } from '@/lib/constants'
 import { Spinner } from '@/components/ui/spinner'
+import { useAuth } from '@/hooks/useAuth'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps) {
-  const { isAuthenticated, user, isLoading } = useAuthStore()
+  const { isAuthenticated, user, isLoading } = useAuth()
   const location = useLocation()
 
   // Show loading state while checking auth

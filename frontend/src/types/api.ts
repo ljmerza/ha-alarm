@@ -91,4 +91,12 @@ export const queryKeys = {
   websocket: {
     status: ['websocket', 'status'] as const,
   },
+  onboarding: {
+    status: ['onboarding', 'status'] as const,
+    setupStatus: ['onboarding', 'setupStatus'] as const,
+  },
+  auth: {
+    session: ['auth', 'session'] as const,
+    currentUser: ['auth', 'currentUser'] as const,
+  },
 }

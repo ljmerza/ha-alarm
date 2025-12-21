@@ -19,7 +19,7 @@ import { Pill } from '@/components/ui/pill'
 import { DatalistInput } from '@/components/ui/datalist-input'
 import { EmptyState } from '@/components/ui/empty-state'
 import { getErrorMessage } from '@/lib/errors'
-import { useEntitiesQuery, useRulesQuery, useSyncEntitiesMutation, useRunRulesMutation, useSaveRuleMutation, useDeleteRuleMutation } from '@/hooks'
+import { useEntitiesQuery, useRulesQuery, useSyncEntitiesMutation, useRunRulesMutation, useSaveRuleMutation, useDeleteRuleMutation } from '@/hooks/useRulesQueries'
 
 const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'trigger', label: 'Trigger' },

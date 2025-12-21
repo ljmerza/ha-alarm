@@ -18,7 +18,7 @@ import { DatalistInput } from '@/components/ui/datalist-input'
 import { EmptyState } from '@/components/ui/empty-state'
 import { getErrorMessage } from '@/lib/errors'
 import type { RuleSimulateResult } from '@/types'
-import { useEntitiesQuery, useSyncEntitiesMutation } from '@/hooks'
+import { useEntitiesQuery, useSyncEntitiesMutation } from '@/hooks/useRulesQueries'
 
 type Row = { id: string; entityId: string; state: string }
 

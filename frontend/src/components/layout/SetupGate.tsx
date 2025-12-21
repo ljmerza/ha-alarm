@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { Routes } from '@/lib/constants'
-import { useAuthStore, useSetupStore } from '@/stores'
 import { Spinner } from '@/components/ui/spinner'
+import { useAuthSessionQuery } from '@/hooks/useAuthQueries'
+import { useSetupStatusQuery } from '@/hooks/useOnboardingQueries'
 
 interface SetupGateProps {
   children: React.ReactNode
@@ -10,14 +10,11 @@ interface SetupGateProps {
 
 export function SetupGate({ children }: SetupGateProps) {
   const location = useLocation()
-  const { isAuthenticated } = useAuthStore()
-  const { status, isLoading, checkStatus } = useSetupStore()
-
-  useEffect(() => {
-    if (!isAuthenticated) return
-    if (status) return
-    void checkStatus()
-  }, [isAuthenticated, status, checkStatus])
+  const sessionQuery = useAuthSessionQuery()
+  const isAuthenticated = sessionQuery.data.isAuthenticated
+  const setupStatusQuery = useSetupStatusQuery()
+  const status = setupStatusQuery.data ?? null
+  const isLoading = setupStatusQuery.isLoading
 
   if (!isAuthenticated) return <>{children}</>
 

@@ -17,4 +17,13 @@ export {
   useDeleteRuleMutation,
 } from './useRulesQueries'
 export { useUsersQuery, useCodesQuery, useCreateCodeMutation, useUpdateCodeMutation } from './useCodesQueries'
+export { useOnboardingStatusQuery, useSetupStatusQuery, useOnboardingCreateMutation } from './useOnboardingQueries'
+export {
+  useAuthSessionQuery,
+  useCurrentUserQuery,
+  useLoginMutation,
+  useLogoutMutation,
+  useVerify2FAMutation,
+  useRefreshTokenMutation,
+} from './useAuthQueries'
 export { useCountdown, useAlarmCountdown, default as countdown } from './useCountdown'

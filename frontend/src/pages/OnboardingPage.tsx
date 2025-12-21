@@ -4,10 +4,9 @@ import { Shield, Eye, EyeOff } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { onboardingService } from '@/services'
-import { useOnboardingStore } from '@/stores'
 import { Routes } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/errors'
+import { useOnboardingCreateMutation } from '@/hooks/useOnboardingQueries'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -25,7 +24,7 @@ type OnboardingForm = z.infer<typeof onboardingSchema>
 
 export function OnboardingPage() {
   const navigate = useNavigate()
-  const { setOnboardingRequired } = useOnboardingStore()
+  const createOnboarding = useOnboardingCreateMutation()
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -42,12 +41,11 @@ export function OnboardingPage() {
     setError(null)
     setIsSubmitting(true)
     try {
-      await onboardingService.create({
+      await createOnboarding.mutateAsync({
         email: data.email,
         password: data.password,
         homeName: data.homeName,
       })
-      setOnboardingRequired(false)
       navigate(Routes.LOGIN)
     } catch (err) {
       setError(getErrorMessage(err) || 'Onboarding failed')

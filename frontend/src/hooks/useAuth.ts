@@ -1,37 +1,73 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/stores'
 import { Routes } from '@/lib/constants'
-import type { LoginCredentials } from '@/types'
+import type { LoginCredentials, User } from '@/types'
+import {
+  useAuthSessionQuery,
+  useCurrentUserQuery,
+  useLoginMutation,
+  useLogoutMutation,
+  useVerify2FAMutation,
+} from '@/hooks/useAuthQueries'
 
 export function useAuth() {
-  const {
-    user,
-    isAuthenticated,
-    isLoading,
-    error,
-    login,
-    logout,
-    verify2FA,
-    fetchCurrentUser,
-    clearError,
-  } = useAuthStore()
+  const sessionQuery = useAuthSessionQuery()
+  const currentUserQuery = useCurrentUserQuery()
+  const loginMutation = useLoginMutation()
+  const logoutMutation = useLogoutMutation()
+  const verify2FAMutation = useVerify2FAMutation()
+
+  const user: User | null = currentUserQuery.data ?? null
+  const isAuthenticated = sessionQuery.data.isAuthenticated
+  const isLoading =
+    currentUserQuery.isLoading || loginMutation.isPending || logoutMutation.isPending || verify2FAMutation.isPending
+
+  const error = useMemo(() => {
+    const errors: Array<unknown> = [
+      currentUserQuery.error,
+      loginMutation.error,
+      logoutMutation.error,
+      verify2FAMutation.error,
+    ]
+    for (const err of errors) {
+      if (err instanceof Error && err.message) return err.message
+      if (err && typeof err === 'object') {
+        const maybe = err as { message?: unknown }
+        if (typeof maybe.message === 'string' && maybe.message) return maybe.message
+      }
+    }
+    return null
+  }, [currentUserQuery.error, loginMutation.error, logoutMutation.error, verify2FAMutation.error])
+
+  const clearError = () => {
+    loginMutation.reset()
+    logoutMutation.reset()
+    verify2FAMutation.reset()
+  }
 
   return {
     user,
     isAuthenticated,
     isLoading,
     error,
-    login,
-    logout,
-    verify2FA,
-    fetchCurrentUser,
+    login: async (credentials: LoginCredentials) => {
+      await loginMutation.mutateAsync(credentials)
+    },
+    logout: async () => {
+      await logoutMutation.mutateAsync()
+    },
+    verify2FA: async (code: string) => {
+      await verify2FAMutation.mutateAsync(code)
+    },
+    fetchCurrentUser: async () => {
+      await currentUserQuery.refetch()
+    },
     clearError,
   }
 }
 
 export function useRequireAuth(redirectTo: string = Routes.LOGIN) {
-  const { isAuthenticated, isLoading, fetchCurrentUser } = useAuthStore()
+  const { isAuthenticated, isLoading, fetchCurrentUser } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -48,7 +84,7 @@ export function useRequireAuth(redirectTo: string = Routes.LOGIN) {
 }
 
 export function useLogin() {
-  const { login, isLoading, error, clearError } = useAuthStore()
+  const { login, isLoading, error, clearError } = useAuth()
   const navigate = useNavigate()
 
   const handleLogin = async (credentials: LoginCredentials) => {

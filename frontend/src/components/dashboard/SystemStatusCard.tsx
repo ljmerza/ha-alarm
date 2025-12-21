@@ -5,7 +5,9 @@ import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { queryKeys } from '@/types'
-import { useWebSocketStatus, useAlarmStateQuery, useSensorsQuery, useRecentEventsQuery, useHomeAssistantStatus } from '@/hooks'
+import { useWebSocketStatus } from '@/hooks/useWebSocketStatus'
+import { useAlarmStateQuery, useSensorsQuery, useRecentEventsQuery } from '@/hooks/useAlarmQueries'
+import { useHomeAssistantStatus } from '@/hooks/useHomeAssistant'
 
 function formatTimestamp(value?: string | null): string {
   if (!value) return '—'
