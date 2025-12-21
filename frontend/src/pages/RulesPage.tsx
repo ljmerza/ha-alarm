@@ -14,6 +14,9 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import { Pill } from '@/components/ui/pill'
+import { DatalistInput } from '@/components/ui/datalist-input'
+import { EmptyState } from '@/components/ui/empty-state'
 
 const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'trigger', label: 'Trigger' },
@@ -587,15 +590,9 @@ export function RulesPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <datalist id="entity-id-options">
-                    {entityIdOptions.slice(0, 400).map((id) => (
-                      <option key={id} value={id} />
-                    ))}
-                  </datalist>
-
-                  {conditions.map((row) => (
-                    <div key={row.id} className="grid gap-2 md:grid-cols-12 items-end">
+	                <div className="space-y-2">
+	                  {conditions.map((row) => (
+	                    <div key={row.id} className="grid gap-2 md:grid-cols-12 items-end">
 	                      <div className="md:col-span-5 space-y-1">
 	                        <label className="text-xs text-muted-foreground">
 	                          Entity ID{' '}
@@ -604,17 +601,18 @@ export function RulesPage() {
 	                            content="A Home Assistant entity_id like binary_sensor.front_door. Use “Sync Entities” to get autocomplete."
 	                          />
 	                        </label>
-                        <Input
-                          list="entity-id-options"
-                          value={row.entityId}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            setConditions((prev) =>
-                              prev.map((c) => (c.id === row.id ? { ...c, entityId: value } : c))
+	                        <DatalistInput
+	                          listId="entity-id-options"
+	                          options={entityIdOptions}
+	                          value={row.entityId}
+	                          onChange={(e) => {
+	                            const value = e.target.value
+	                            setConditions((prev) =>
+	                              prev.map((c) => (c.id === row.id ? { ...c, entityId: value } : c))
                             )
-                          }}
-                          placeholder="binary_sensor.front_door"
-                        />
+	                          }}
+	                          placeholder="binary_sensor.front_door"
+	                        />
                       </div>
 	                      <div className="md:col-span-3 space-y-1">
 	                        <label className="text-xs text-muted-foreground">
@@ -920,9 +918,9 @@ export function RulesPage() {
           <CardDescription>{isLoading ? 'Loading…' : `${rules.length} rule(s)`}</CardDescription>
         </CardHeader>
         <CardContent>
-          {rules.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No rules yet.</div>
-          ) : (
+	          {rules.length === 0 ? (
+	            <EmptyState title="No rules yet." description="Create a rule above to get started." />
+	          ) : (
             <div className="space-y-2">
               {rules.map((r) => (
                 <div
@@ -953,20 +951,17 @@ export function RulesPage() {
 
                     <div className="mt-2">
                       <div className="text-xs text-muted-foreground">Entities</div>
-                      {r.entityIds.length === 0 ? (
-                        <div className="text-xs text-muted-foreground">—</div>
-                      ) : (
-                        <ul className="mt-1 flex flex-wrap gap-1">
-                          {r.entityIds.map((id) => (
-                            <li
-                              key={id}
-                              className="rounded-full border border-input bg-background px-2 py-0.5 text-xs text-muted-foreground"
-                            >
-                              {id}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+	                      {r.entityIds.length === 0 ? (
+	                        <div className="text-xs text-muted-foreground">—</div>
+	                      ) : (
+	                        <ul className="mt-1 flex flex-wrap gap-1">
+	                          {r.entityIds.map((id) => (
+	                            <li key={id}>
+	                              <Pill>{id}</Pill>
+	                            </li>
+	                          ))}
+	                        </ul>
+	                      )}
                     </div>
                   </div>
                   <Button type="button" variant="outline" onClick={() => startEdit(r)}>

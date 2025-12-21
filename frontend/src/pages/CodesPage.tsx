@@ -8,7 +8,6 @@ import type { AlarmCode, CreateCodeRequest, UpdateCodeRequest, User } from '@/ty
 import { queryKeys } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { DateTimeRangePicker } from '@/components/ui/date-time-range-picker'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -17,6 +16,10 @@ import { HelpTip } from '@/components/ui/help-tip'
 import { Select } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import { FormField } from '@/components/ui/form-field'
+import { SectionCard } from '@/components/ui/section-card'
+import { EmptyState } from '@/components/ui/empty-state'
+import { LoadingInline } from '@/components/ui/loading-inline'
 
 type CreateCodeTypeOption = 'permanent' | 'temporary'
 
@@ -324,16 +327,17 @@ function CodesPageContent() {
       <PageHeader title="Codes" />
 
       {isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Manage User Codes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <SectionCard title="Manage User Codes" contentClassName="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="user">
-                  User
-                </label>
+              <FormField
+                label="User"
+                htmlFor="user"
+                error={
+                  usersQuery.isError
+                    ? `Failed to load users: ${getErrorMessage(usersQuery.error, 'Unknown error')}`
+                    : null
+                }
+              >
                 <Select
                   id="user"
                   value={selectedUserIdOrDefault}
@@ -346,19 +350,13 @@ function CodesPageContent() {
                     </option>
                   ))}
                 </Select>
-                {usersQuery.isError && (
-                  <p className="text-sm text-destructive">
-                    Failed to load users: {getErrorMessage(usersQuery.error, 'Unknown error')}
-                  </p>
-                )}
-              </div>
+              </FormField>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Selected</label>
+              <FormField label="Selected">
                 <div className="rounded-md border border-input bg-muted/30 px-3 py-2 text-sm">
                   {selectedUserDisplay || '—'}
                 </div>
-              </div>
+              </FormField>
             </div>
 
             <div className="rounded-md border border-input p-4">
@@ -372,13 +370,11 @@ function CodesPageContent() {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium" htmlFor="create-type">
-                      Type
-                    </label>
-                    <HelpTip content="Temporary codes can have date/time and day-of-week restrictions. Permanent codes are always valid (unless deactivated)." />
-                  </div>
+                <FormField
+                  label="Type"
+                  htmlFor="create-type"
+                  help="Temporary codes can have date/time and day-of-week restrictions. Permanent codes are always valid (unless deactivated)."
+                >
                   <Select
                     id="create-type"
                     value={createCodeType}
@@ -388,11 +384,9 @@ function CodesPageContent() {
                     <option value="permanent">Permanent</option>
                     <option value="temporary">Temporary</option>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="create-label">
-                    Label (optional)
-                  </label>
+                </FormField>
+
+                <FormField label="Label (optional)" htmlFor="create-label">
                   <Input
                     id="create-label"
                     value={createLabel}
@@ -400,17 +394,14 @@ function CodesPageContent() {
                     placeholder="Front door"
                     disabled={createMutation.isPending}
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="create-code">
-                    Code (4–8 digits)
-                  </label>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-xs text-muted-foreground">
-                      Codes are never shown again after creation.
-                    </div>
-                    <HelpTip content="Codes are stored hashed on the server. Enter a 4–8 digit PIN; you cannot view it later." />
-                  </div>
+                </FormField>
+
+                <FormField
+                  label="Code (4–8 digits)"
+                  htmlFor="create-code"
+                  help="Codes are stored hashed on the server. Enter a 4–8 digit PIN; you cannot view it later."
+                  description="Codes are never shown again after creation."
+                >
                   <Input
                     id="create-code"
                     value={createCode}
@@ -420,7 +411,7 @@ function CodesPageContent() {
                     autoComplete="one-time-code"
                     disabled={createMutation.isPending}
                   />
-                </div>
+                </FormField>
               </div>
 
               {createCodeType === 'temporary' && (
@@ -560,39 +551,36 @@ function CodesPageContent() {
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </SectionCard>
       )}
 
       {!isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Codes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Ask an admin to create or update codes for your account.
-            </p>
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Your Codes"
+          description="Ask an admin to create or update codes for your account."
+        />
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Codes {selectedUserDisplay ? <span className="text-muted-foreground">({selectedUserDisplay})</span> : null}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {codesQuery.isLoading && (
-            <div className="text-sm text-muted-foreground">Loading codes…</div>
-          )}
-          {codesQuery.isError && (
-            <div className="text-sm text-destructive">
+      <SectionCard
+        title={
+          <>
+            Codes{' '}
+            {selectedUserDisplay ? <span className="text-muted-foreground">({selectedUserDisplay})</span> : null}
+          </>
+        }
+        contentClassName="space-y-4"
+      >
+        {codesQuery.isLoading && <LoadingInline label="Loading codes…" />}
+        {codesQuery.isError && (
+          <Alert variant="error" layout="inline">
+            <AlertDescription>
               Failed to load codes: {getErrorMessage(codesQuery.error, 'Unknown error')}
-            </div>
-          )}
-          {!codesQuery.isLoading && !codesQuery.isError && (codesQuery.data || []).length === 0 && (
-            <div className="text-sm text-muted-foreground">No codes found.</div>
-          )}
+            </AlertDescription>
+          </Alert>
+        )}
+        {!codesQuery.isLoading && !codesQuery.isError && (codesQuery.data || []).length === 0 && (
+          <EmptyState title="No codes found." description="Create a code above or ask an admin to add one." />
+        )}
 
           {(codesQuery.data || []).map((code) => (
             <div key={code.id} className="rounded-md border border-input p-4">
@@ -813,8 +801,7 @@ function CodesPageContent() {
               )}
             </div>
           ))}
-        </CardContent>
-      </Card>
+      </SectionCard>
     </div>
   )
 }

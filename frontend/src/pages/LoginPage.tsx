@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CenteredCard } from '@/components/ui/centered-card'
+import { FormField } from '@/components/ui/form-field'
+import { IconButton } from '@/components/ui/icon-button'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -48,10 +50,7 @@ export function LoginPage() {
       icon={<Shield className="h-6 w-6" />}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-medium">
-            Email
-          </label>
+        <FormField label="Email" htmlFor="email" required error={errors.email?.message}>
           <Input
             id="email"
             type="email"
@@ -59,13 +58,9 @@ export function LoginPage() {
             {...register('email')}
             disabled={isLoading}
           />
-          {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
-        </div>
+        </FormField>
 
-        <div className="space-y-2">
-          <label htmlFor="password" className="text-sm font-medium">
-            Password
-          </label>
+        <FormField label="Password" htmlFor="password" required error={errors.password?.message}>
           <div className="relative">
             <Input
               id="password"
@@ -74,18 +69,16 @@ export function LoginPage() {
               {...register('password')}
               disabled={isLoading}
             />
-            <Button
+            <IconButton
               type="button"
-              variant="ghost"
-              size="icon"
               className="absolute right-0 top-0 h-full px-3"
               onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
+            </IconButton>
           </div>
-          {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
-        </div>
+        </FormField>
 
         {error && (
           <Alert variant="error" layout="inline">

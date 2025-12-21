@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { CenteredCard } from '@/components/ui/centered-card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { FormField } from '@/components/ui/form-field'
 
 const ARMABLE_STATES: AlarmStateType[] = [
   AlarmState.ARMED_HOME,
@@ -101,18 +102,15 @@ export function SetupWizardPage() {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="label" className="text-sm font-medium">
-              Label (optional)
-            </label>
+          <FormField
+            label="Label (optional)"
+            htmlFor="label"
+            error={errors.label?.message}
+          >
             <Input id="label" type="text" placeholder="Admin" {...register('label')} disabled={isSubmitting} />
-            {errors.label && <p className="text-sm text-destructive">{errors.label.message}</p>}
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <label htmlFor="code" className="text-sm font-medium">
-              Code
-            </label>
+          <FormField label="Code" htmlFor="code" required error={errors.code?.message}>
             <Input
               id="code"
               inputMode="numeric"
@@ -121,8 +119,7 @@ export function SetupWizardPage() {
               {...register('code')}
               disabled={isSubmitting}
             />
-            {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
-          </div>
+          </FormField>
 
           <div className="space-y-2">
             <div className="text-sm font-medium">Allowed Arm States</div>
@@ -146,10 +143,12 @@ export function SetupWizardPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="reauthPassword" className="text-sm font-medium">
-              Re-authenticate (password)
-            </label>
+          <FormField
+            label="Re-authenticate (password)"
+            htmlFor="reauthPassword"
+            required
+            error={errors.reauthPassword?.message}
+          >
             <Input
               id="reauthPassword"
               type="password"
@@ -157,10 +156,7 @@ export function SetupWizardPage() {
               {...register('reauthPassword')}
               disabled={isSubmitting}
             />
-            {errors.reauthPassword && (
-              <p className="text-sm text-destructive">{errors.reauthPassword.message}</p>
-            )}
-          </div>
+          </FormField>
 
           {error && (
             <Alert variant="error" layout="inline">

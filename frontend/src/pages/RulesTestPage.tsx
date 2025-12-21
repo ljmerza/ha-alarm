@@ -12,6 +12,8 @@ import { PageHeader } from '@/components/ui/page-header'
 import { HelpTip } from '@/components/ui/help-tip'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { DatalistInput } from '@/components/ui/datalist-input'
+import { EmptyState } from '@/components/ui/empty-state'
 
 type Row = { id: string; entityId: string; state: string }
 
@@ -380,12 +382,6 @@ export function RulesTestPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <datalist id="rules-test-entity-options">
-            {entityIdOptions.slice(0, 500).map((id) => (
-              <option key={id} value={id} />
-            ))}
-          </datalist>
-
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground">
               Mode{' '}
@@ -426,15 +422,17 @@ export function RulesTestPage() {
 	                        content="Pick a Home Assistant entity_id. Use “Sync Entities” at the top if the list is empty."
 	                      />
 	                    </label>
-	                    <Input
-	                      list="rules-test-entity-options"
+	                    <DatalistInput
+	                      listId="rules-test-entity-options"
+	                      options={entityIdOptions}
+	                      maxOptions={500}
 	                      value={row.entityId}
 	                      onChange={(e) => {
 	                        setRowEntityId(row.id, e.target.value)
 	                      }}
-                      placeholder="binary_sensor.front_door"
-                      disabled={isLoading || isRunning}
-                    />
+	                      placeholder="binary_sensor.front_door"
+	                      disabled={isLoading || isRunning}
+	                    />
                     {row.entityId.trim() && entitiesById.get(row.entityId.trim())?.lastState != null && (
                       <div className="text-xs text-muted-foreground">
                         Baseline: {String(entitiesById.get(row.entityId.trim())?.lastState)}
@@ -517,13 +515,15 @@ export function RulesTestPage() {
 	                        content="Entity to change for the delta run. Baseline comes from the registry state."
 	                      />
 	                    </label>
-	                    <Input
-	                      list="rules-test-entity-options"
+	                    <DatalistInput
+	                      listId="rules-test-entity-options"
+	                      options={entityIdOptions}
+	                      maxOptions={500}
 	                      value={deltaEntityId}
 	                      onChange={(e) => setDeltaEntityId(e.target.value)}
 	                      placeholder="binary_sensor.front_door"
-                      disabled={isLoading || isRunning}
-                    />
+	                      disabled={isLoading || isRunning}
+	                    />
                     {deltaEntityId.trim() && entitiesById.get(deltaEntityId.trim())?.lastState != null && (
                       <div className="text-xs text-muted-foreground">
                         Baseline: {String(entitiesById.get(deltaEntityId.trim())?.lastState)}
@@ -685,7 +685,7 @@ export function RulesTestPage() {
 	        </CardHeader>
         <CardContent className="space-y-3">
           {!result ? (
-            <div className="text-sm text-muted-foreground">No results yet.</div>
+            <EmptyState title="No results yet." description="Run a simulation to see which rules match." />
           ) : (
             <>
               {mode === 'delta' && diff && (

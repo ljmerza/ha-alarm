@@ -4,15 +4,13 @@ import { type AlarmStateType } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Modal } from '@/components/ui/modal'
 import { AlarmStatus } from './AlarmStatus'
 import { ArmButtons } from './ArmButtons'
 import { Keypad } from './Keypad'
 import { CountdownTimer } from './CountdownTimer'
 import { QuickActions } from './QuickActions'
 import { AlarmHistory } from './AlarmHistory'
-
-// We need to create a simple Dialog component since we haven't added it yet
-// For now, let's create an inline version
 
 interface AlarmPanelProps {
   className?: string
@@ -203,28 +201,27 @@ export function AlarmPanel({ className }: AlarmPanelProps) {
 
       {/* Keypad Modal */}
       {showKeypad && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <Card className="w-full max-w-sm mx-4">
-            <CardHeader>
-              <CardTitle className="text-center">
-                {mode === 'arming' ? 'Enter Code to Arm' : 'Enter Code to Disarm'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Keypad
-                onSubmit={handleCodeSubmit}
-                onCancel={handleCancel}
-                disabled={isLoading}
-                submitLabel={mode === 'arming' ? 'Arm' : 'Disarm'}
-              />
-              {error && (
-                <Alert variant="error" layout="inline" className="mt-4 text-center">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <Modal
+          open={showKeypad}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) handleCancel()
+          }}
+          title={mode === 'arming' ? 'Enter Code to Arm' : 'Enter Code to Disarm'}
+          maxWidthClassName="max-w-sm"
+          showCloseButton={false}
+        >
+          <Keypad
+            onSubmit={handleCodeSubmit}
+            onCancel={handleCancel}
+            disabled={isLoading}
+            submitLabel={mode === 'arming' ? 'Arm' : 'Disarm'}
+          />
+          {error && (
+            <Alert variant="error" layout="inline" className="mt-4 text-center">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </Modal>
       )}
     </div>
   )

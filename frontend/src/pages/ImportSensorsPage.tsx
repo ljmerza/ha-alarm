@@ -5,13 +5,16 @@ import { Routes } from '@/lib/constants'
 import { homeAssistantService, sensorsService } from '@/services'
 import { useAlarmStore } from '@/stores'
 import type { HomeAssistantEntity } from '@/services/homeAssistant'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/ui/page-header'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import { LoadingInline } from '@/components/ui/loading-inline'
+import { LoadMore } from '@/components/ui/load-more'
+import { SectionCard } from '@/components/ui/section-card'
+import { EmptyState } from '@/components/ui/empty-state'
 
 function defaultEntryPointFromDeviceClass(deviceClass?: string | null): boolean {
   if (!deviceClass) return false
@@ -195,51 +198,45 @@ export function ImportSensorsPage() {
         }
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Search</CardTitle>
-          <CardDescription>Select which entities to import.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Search by name or entity_id…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
+      <SectionCard title="Search" description="Select which entities to import." contentClassName="flex flex-col gap-3">
+        <div className="relative w-full md:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search by name or entity_id…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">View</span>
-            <Button
-              type="button"
-              size="sm"
-              variant={viewMode === 'available' ? 'secondary' : 'outline'}
-              onClick={() => setViewMode('available')}
-            >
-              Available ({availableSensorEntities.length})
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={viewMode === 'imported' ? 'secondary' : 'outline'}
-              onClick={() => setViewMode('imported')}
-            >
-              Imported ({importedSensorEntities.length})
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={viewMode === 'all' ? 'secondary' : 'outline'}
-              onClick={() => setViewMode('all')}
-            >
-              All ({allSensorEntities.length})
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">View</span>
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === 'available' ? 'secondary' : 'outline'}
+            onClick={() => setViewMode('available')}
+          >
+            Available ({availableSensorEntities.length})
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === 'imported' ? 'secondary' : 'outline'}
+            onClick={() => setViewMode('imported')}
+          >
+            Imported ({importedSensorEntities.length})
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === 'all' ? 'secondary' : 'outline'}
+            onClick={() => setViewMode('all')}
+          >
+            All ({allSensorEntities.length})
+          </Button>
+        </div>
+      </SectionCard>
 
       {success && (
         <Alert variant="success" layout="banner">
@@ -264,22 +261,14 @@ export function ImportSensorsPage() {
         </Alert>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Entities</CardTitle>
-          <CardDescription>
-            Select the sensors you want the alarm to react to. “Entry sensor” means it starts the
-            entry delay (Pending) instead of triggering instantly.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <SectionCard
+        title="Entities"
+        description="Select the sensors you want the alarm to react to. “Entry sensor” means it starts the entry delay (Pending) instead of triggering instantly."
+      >
           {isLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
-            </div>
+            <LoadingInline label="Loading…" />
           ) : filtered.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No entities found.</div>
+            <EmptyState title="No entities found." description="Try a different search query or view mode." />
           ) : (
             <div className="space-y-2">
               {visible.map((entity) => {
@@ -391,16 +380,11 @@ export function ImportSensorsPage() {
               })}
 
               {visibleCount < filtered.length && (
-                <div className="pt-2">
-                  <Button type="button" variant="outline" onClick={() => setVisibleCount((c) => c + 50)}>
-                    Load more
-                  </Button>
-                </div>
+                <LoadMore onClick={() => setVisibleCount((c) => c + 50)} />
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-muted-foreground">

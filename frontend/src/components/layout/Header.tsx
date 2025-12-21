@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuthStore, useUIStore, useAlarmStore } from '@/stores'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { IconButton } from '@/components/ui/icon-button'
 import { AlarmStateLabels, AlarmState, Routes } from '@/lib/constants'
 
 export function Header() {
@@ -36,19 +37,17 @@ export function Header() {
     <header className="flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
       {/* Mobile Menu Button */}
       {isMobile && (
-        <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+        <IconButton onClick={toggleSidebar} aria-label="Toggle menu">
           <Menu className="h-5 w-5" />
-          <span className="sr-only">Toggle menu</span>
-        </Button>
+        </IconButton>
       )}
 
       {/* Home */}
-      <Button asChild variant="ghost" size="icon">
+      <IconButton asChild aria-label="Home">
         <Link to={Routes.HOME} aria-label="Home">
           <House className="h-5 w-5" />
-          <span className="sr-only">Home</span>
         </Link>
-      </Button>
+      </IconButton>
 
       {/* Alarm Status Badge */}
       <div className="flex items-center gap-2">
@@ -68,16 +67,14 @@ export function Header() {
       {/* Right side controls */}
       <div className="flex items-center gap-2">
         {/* Theme Toggle */}
-        <Button variant="ghost" size="icon" onClick={cycleTheme}>
+        <IconButton onClick={cycleTheme} aria-label="Toggle theme">
           <ThemeIcon className="h-5 w-5" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
+        </IconButton>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
+        <IconButton className="relative" aria-label="Notifications">
           <Bell className="h-5 w-5" />
-          <span className="sr-only">Notifications</span>
-        </Button>
+        </IconButton>
 
         {/* User Menu */}
         <div className="flex items-center gap-2">
