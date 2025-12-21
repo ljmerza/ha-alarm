@@ -26,11 +26,11 @@ class SetupStatusApiTests(APITestCase):
             timing_snapshot={},
         )
 
-    def test_setup_required_when_no_codes(self):
+    def test_setup_not_required_when_no_codes(self):
         url = reverse("onboarding-setup-status")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data["setup_required"])
+        self.assertFalse(response.data["setup_required"])
         self.assertFalse(response.data["requirements"]["has_alarm_code"])
 
     def test_setup_not_required_when_code_exists(self):
@@ -47,3 +47,11 @@ class SetupStatusApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data["setup_required"])
         self.assertTrue(response.data["requirements"]["has_alarm_code"])
+
+    def test_setup_required_when_missing_alarm_snapshot(self):
+        AlarmStateSnapshot.objects.all().delete()
+        url = reverse("onboarding-setup-status")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["setup_required"])
+        self.assertFalse(response.data["requirements"]["has_alarm_snapshot"])

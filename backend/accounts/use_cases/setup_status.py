@@ -11,7 +11,8 @@ def compute_setup_status(*, user: User) -> dict:
     has_sensors = Sensor.objects.exists()
     home_assistant_connected = False
 
-    setup_required = not (has_alarm_code and has_active_settings_profile and has_alarm_snapshot)
+    # Alarm codes are optional at initial setup; users can create codes later.
+    setup_required = not (has_active_settings_profile and has_alarm_snapshot)
 
     return {
         "onboarding_required": False,
@@ -24,4 +25,3 @@ def compute_setup_status(*, user: User) -> dict:
             "home_assistant_connected": home_assistant_connected,
         },
     }
-
