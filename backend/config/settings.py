@@ -22,10 +22,22 @@ for candidate in [env_file, BASE_DIR / ".env", BASE_DIR.parent / ".env"]:
 
 SECRET_KEY = env("SECRET_KEY", default="insecure-dev-secret-key")
 DEBUG = env.bool("DEBUG", default=False)
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+# Keep a copy of the explicit allowlist even if we later expand to "*"
+# so we can use it for dev-only conveniences like CSRF trusted origins.
+RAW_ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+ALLOWED_HOSTS = RAW_ALLOWED_HOSTS
 if env.bool("ALLOW_ALL_HOSTS", default=False):
     ALLOWED_HOSTS = ["*"]
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+if DEBUG and not CSRF_TRUSTED_ORIGINS:
+    # In dev the frontend often runs on a different port (or is reverse-proxied),
+    # causing Django's origin check to reject POSTs unless explicitly trusted.
+    dev_ports = (5428, 5173, 3000)
+    dev_hosts = {"localhost", "127.0.0.1", *RAW_ALLOWED_HOSTS}
+    dev_hosts.discard("*")
+    CSRF_TRUSTED_ORIGINS = [
+        f"http://{host}:{port}" for host in sorted(dev_hosts) for port in dev_ports
+    ]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
