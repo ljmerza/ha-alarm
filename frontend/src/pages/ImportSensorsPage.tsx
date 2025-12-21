@@ -34,6 +34,19 @@ export function ImportSensorsPage() {
 
   const queryClient = useQueryClient()
   const { isAuthenticated } = useAuthStore()
+
+  const haStatusQuery = useQuery({
+    queryKey: queryKeys.homeAssistant.status,
+    queryFn: homeAssistantService.getStatus,
+    enabled: isAuthenticated,
+  })
+
+  const haEntitiesQuery = useQuery({
+    queryKey: queryKeys.homeAssistant.entities,
+    queryFn: homeAssistantService.listEntities,
+    enabled: !!isAuthenticated && !!haStatusQuery.data?.configured && !!haStatusQuery.data?.reachable,
+  })
+
   const sensorsQuery = useQuery({
     queryKey: queryKeys.sensors.all,
     queryFn: sensorsService.getSensors,
@@ -42,8 +55,6 @@ export function ImportSensorsPage() {
   const sensors = useMemo(() => sensorsQuery.data ?? [], [sensorsQuery.data])
 
   const [query, setQuery] = useState('')
-  const [entities, setEntities] = useState<HomeAssistantEntity[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<{ count: number; names: string[] } | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -56,6 +67,32 @@ export function ImportSensorsPage() {
   )
   const [viewMode, setViewMode] = useState<ViewMode>('available')
   const [visibleCount, setVisibleCount] = useState(50)
+
+  const haStatusError = useMemo(() => {
+    const status = haStatusQuery.data
+    if (haStatusQuery.isError) return getErrorMessage(haStatusQuery.error) || 'Failed to check Home Assistant status'
+    if (!status) return null
+    if (!status.configured) {
+      return 'Home Assistant is not configured. Set HA_URL/HA_TOKEN in .env and restart.'
+    }
+    if (!status.reachable) {
+      return status.error || 'Home Assistant is offline/unreachable. Check network and token.'
+    }
+    return null
+  }, [haStatusQuery.data, haStatusQuery.error, haStatusQuery.isError])
+
+  const entitiesLoadError = useMemo(() => {
+    if (haStatusError) return haStatusError
+    if (haEntitiesQuery.isError) return getErrorMessage(haEntitiesQuery.error) || 'Failed to load entities'
+    return null
+  }, [haEntitiesQuery.error, haEntitiesQuery.isError, haStatusError])
+
+  const entities = useMemo<HomeAssistantEntity[]>(() => {
+    if (entitiesLoadError) return []
+    return haEntitiesQuery.data ?? []
+  }, [entitiesLoadError, haEntitiesQuery.data])
+
+  const isLoading = haStatusQuery.isLoading || haEntitiesQuery.isLoading || sensorsQuery.isLoading
 
   const toDomId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_')
 
@@ -76,45 +113,9 @@ export function ImportSensorsPage() {
     return map
   }, [sensors])
 
-  useEffect(() => {
-    let mounted = true
-    setIsLoading(true)
-    setError(null)
-    setSuccess(null)
+  const bannerError = error ?? entitiesLoadError
 
-    homeAssistantService
-      .getStatus()
-      .then((status) => {
-        if (!mounted) return
-        if (!status.configured) {
-          setError('Home Assistant is not configured. Set HA_URL/HA_TOKEN in .env and restart.')
-          setEntities([])
-          return
-        }
-        if (!status.reachable) {
-          setError('Home Assistant is offline/unreachable. Check network and token.')
-          setEntities([])
-          return
-        }
-        return homeAssistantService.listEntities().then((list) => {
-          if (!mounted) return
-          setEntities(list)
-        })
-      })
-      .catch((err) => {
-        if (!mounted) return
-        setError(err?.message || 'Failed to load entities')
-      })
-      .finally(() => {
-        if (!mounted) return
-        setIsLoading(false)
-      })
-
-    return () => {
-      mounted = false
-    }
-  }, [])
-
+  // Reset paging when search/view changes
   useEffect(() => {
     setVisibleCount(50)
   }, [query, viewMode])
@@ -262,9 +263,9 @@ export function ImportSensorsPage() {
         </Alert>
       )}
 
-      {error && (
+      {bannerError && (
         <Alert variant="error" layout="banner">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{bannerError}</AlertDescription>
         </Alert>
       )}
 

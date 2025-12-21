@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
+from typing import Any, Callable
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -38,7 +40,14 @@ class RuleRunResult:
 
 
 @transaction.atomic
-def run_rules(*, now=None, actor_user=None, repos: RuleEngineRepositories | None = None) -> RuleRunResult:
+def run_rules(
+    *,
+    now=None,
+    actor_user=None,
+    repos: RuleEngineRepositories | None = None,
+    execute_actions_func: Callable[..., dict[str, Any]] = execute_actions,
+    log_action_func: Callable[..., None] = log_rule_action,
+) -> RuleRunResult:
     repos = repos or default_rule_engine_repositories()
     now = now or timezone.now()
     rules = repos.list_enabled_rules()
@@ -76,8 +85,8 @@ def run_rules(*, now=None, actor_user=None, repos: RuleEngineRepositories | None
         try:
             then = (rule.definition or {}).get("then") if isinstance(rule.definition, dict) else []
             actions = then if isinstance(then, list) else []
-            result = execute_actions(rule=rule, actions=actions, now=now, actor_user=actor_user)
-            log_rule_action(
+            result = execute_actions_func(rule=rule, actions=actions, now=now, actor_user=actor_user)
+            log_action_func(
                 rule=rule,
                 fired_at=now,
                 kind=rule.kind,
@@ -91,7 +100,7 @@ def run_rules(*, now=None, actor_user=None, repos: RuleEngineRepositories | None
             fired += 1
         except Exception as exc:  # pragma: no cover - defensive
             errors += 1
-            log_rule_action(
+            log_action_func(
                 rule=rule,
                 fired_at=now,
                 kind=rule.kind,
@@ -135,8 +144,8 @@ def run_rules(*, now=None, actor_user=None, repos: RuleEngineRepositories | None
         then = definition.get("then") if isinstance(definition, dict) else []
         actions = then if isinstance(then, list) else []
         try:
-            result = execute_actions(rule=rule, actions=actions, now=now, actor_user=actor_user)
-            log_rule_action(
+            result = execute_actions_func(rule=rule, actions=actions, now=now, actor_user=actor_user)
+            log_action_func(
                 rule=rule,
                 fired_at=now,
                 kind=rule.kind,
@@ -149,7 +158,7 @@ def run_rules(*, now=None, actor_user=None, repos: RuleEngineRepositories | None
             fired += 1
         except Exception as exc:  # pragma: no cover - defensive
             errors += 1
-            log_rule_action(
+            log_action_func(
                 rule=rule,
                 fired_at=now,
                 kind=rule.kind,

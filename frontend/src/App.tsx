@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Routes as AppRoutes } from '@/lib/constants'
 import { useUIStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { AppShell, ProtectedRoute, SetupGate } from '@/components/layout'
+import { AppErrorBoundary } from '@/components/providers/AppErrorBoundary'
 import { Spinner } from '@/components/ui/spinner'
 import {
   LoginPage,
@@ -122,7 +123,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppContent />
+        <AppErrorBoundary>
+          <AppContent />
+        </AppErrorBoundary>
       </BrowserRouter>
     </QueryClientProvider>
   )

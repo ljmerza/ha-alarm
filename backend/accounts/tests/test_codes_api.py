@@ -101,6 +101,35 @@ class CodesApiTests(APITestCase):
         self.assertEqual(response.data[0]["user_id"], str(self.user.id))
         self.assertEqual(response.data[0]["allowed_states"], [UserCodeAllowedState.AlarmState.ARMED_HOME])
 
+    def test_non_admin_can_read_own_code_detail(self):
+        code = UserCode.objects.create(
+            user=self.user,
+            code_hash="not-used-here",
+            label="User code",
+            code_type=UserCode.CodeType.PERMANENT,
+            pin_length=4,
+            is_active=True,
+        )
+        self.client.force_authenticate(self.user)
+        url = reverse("code-detail", args=[code.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["user_id"], str(self.user.id))
+
+    def test_non_admin_cannot_read_other_user_code_detail(self):
+        other_code = UserCode.objects.create(
+            user=self.admin,
+            code_hash="not-used-here",
+            label="Admin code",
+            code_type=UserCode.CodeType.PERMANENT,
+            pin_length=4,
+            is_active=True,
+        )
+        self.client.force_authenticate(self.user)
+        url = reverse("code-detail", args=[other_code.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
     def test_non_admin_cannot_create_code(self):
         self.client.force_authenticate(self.user)
         url = reverse("codes")

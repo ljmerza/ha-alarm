@@ -62,7 +62,7 @@ def resolve_create_target_user(*, actor_user: User, requested_user_id: str | Non
     return target_user
 
 
-def get_code_for_read(*, actor_user: User, code_id: int) -> UserCode:
+def get_code_for_read(*, code_id: int) -> UserCode:
     code = (
         UserCode.objects.select_related("user")
         .prefetch_related("allowed_states")
@@ -71,8 +71,6 @@ def get_code_for_read(*, actor_user: User, code_id: int) -> UserCode:
     )
     if not code:
         raise NotFound("Not found.")
-    if not is_admin(actor_user) and code.user_id != actor_user.id:
-        raise Forbidden("Forbidden.")
     return code
 
 

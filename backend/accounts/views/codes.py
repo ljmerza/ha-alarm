@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import UserCode
-from accounts.permissions import IsAdminRole
+from accounts.permissions import IsAdminOrSelf, IsAdminRole
 from accounts.serializers import UserCodeCreateSerializer, UserCodeSerializer, UserCodeUpdateSerializer
 from accounts.use_cases import codes as codes_uc
 from accounts.use_cases import user_codes as user_codes_uc
@@ -62,12 +62,16 @@ class CodesView(APIView):
 
 class CodeDetailView(APIView):
     def get_permissions(self):
-        if getattr(self.request, "method", "").upper() == "PATCH":
+        method = getattr(self.request, "method", "").upper()
+        if method == "PATCH":
             return [IsAuthenticated(), IsAdminRole()]
+        if method == "GET":
+            return [IsAuthenticated(), IsAdminOrSelf()]
         return super().get_permissions()
 
     def get(self, request, code_id: int):
-        code = codes_uc.get_code_for_read(actor_user=request.user, code_id=code_id)
+        code = codes_uc.get_code_for_read(code_id=code_id)
+        self.check_object_permissions(request, code)
         return Response(UserCodeSerializer(code).data, status=status.HTTP_200_OK)
 
     def patch(self, request, code_id: int):

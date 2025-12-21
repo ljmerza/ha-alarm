@@ -85,5 +85,6 @@ export const queryKeys = {
   health: ['health'] as const,
   homeAssistant: {
     status: ['homeAssistant', 'status'] as const,
+    entities: ['homeAssistant', 'entities'] as const,
   },
 }
