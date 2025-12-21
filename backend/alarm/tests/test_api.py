@@ -150,6 +150,11 @@ class AlarmApiTests(APITestCase):
         sensor.refresh_from_db()
         self.assertEqual(sensor.is_entry_point, False)
 
+    def test_get_sensor_detail_404_when_missing(self):
+        url = reverse("alarm-sensor-detail", args=[99999])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
     def test_get_sensors_uses_entity_cache_for_current_state(self):
         Sensor.objects.create(
             name="Front Door",
@@ -268,6 +273,11 @@ class AlarmApiTests(APITestCase):
 
         response = self.client.delete(detail_url)
         self.assertEqual(response.status_code, 204)
+
+    def test_rule_detail_404_when_missing(self):
+        detail_url = reverse("alarm-rule-detail", args=[99999])
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, 404)
 
     def test_rules_run_endpoint_fires_immediate_rule(self):
         AlarmSettingsProfile.objects.all().delete()

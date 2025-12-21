@@ -1,17 +1,15 @@
 import { useCallback, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useWebSocket } from '@/hooks/useWebSocket'
 import { AlarmState } from '@/lib/constants'
 import type { AlarmStateType } from '@/lib/constants'
 import { alarmService, sensorsService } from '@/services'
 import { useAuthStore } from '@/stores'
-import type { AlarmEvent, AlarmSettingsProfile, AlarmStateSnapshot, CountdownPayload, Sensor } from '@/types'
+import type { AlarmEvent, AlarmSettingsProfile, AlarmStateSnapshot, CountdownPayload, Sensor, WebSocketStatus } from '@/types'
 import { queryKeys } from '@/types'
 
 export function useAlarm() {
   const queryClient = useQueryClient()
   const { isAuthenticated } = useAuthStore()
-  const ws = useWebSocket()
 
   const alarmStateQuery = useQuery({
     queryKey: queryKeys.alarm.state,
@@ -41,6 +39,13 @@ export function useAlarm() {
     queryKey: queryKeys.alarm.countdown,
     queryFn: async () => null,
     initialData: null,
+    enabled: false,
+  })
+
+  const wsStatusQuery = useQuery<WebSocketStatus>({
+    queryKey: queryKeys.websocket.status,
+    queryFn: async () => 'disconnected' as WebSocketStatus,
+    initialData: 'disconnected',
     enabled: false,
   })
 
@@ -184,7 +189,7 @@ export function useAlarm() {
     settings,
     sensors,
     recentEvents,
-    wsStatus: ws.status,
+    wsStatus: wsStatusQuery.data,
     countdown,
     isLoading,
     error,

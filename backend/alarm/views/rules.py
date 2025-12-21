@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from alarm.models import Rule
 from alarm.serializers import RuleSerializer, RuleUpsertSerializer
 from alarm.use_cases import rules as rules_uc
+from config.view_utils import ObjectPermissionMixin
 
 
 class RulesView(APIView):
@@ -24,20 +25,21 @@ class RulesView(APIView):
         return Response(RuleSerializer(rule).data, status=status.HTTP_201_CREATED)
 
 
-class RuleDetailView(APIView):
+class RuleDetailView(ObjectPermissionMixin, APIView):
     def get(self, request, rule_id: int):
-        rule = Rule.objects.get(pk=rule_id)
+        rule = self.get_object_or_404(request, queryset=Rule.objects.all(), pk=rule_id)
         return Response(RuleSerializer(rule).data, status=status.HTTP_200_OK)
 
     def patch(self, request, rule_id: int):
-        rule = Rule.objects.get(pk=rule_id)
+        rule = self.get_object_or_404(request, queryset=Rule.objects.all(), pk=rule_id)
         serializer = RuleUpsertSerializer(rule, data=request.data, partial=True, context={"request": request})
         serializer.is_valid(raise_exception=True)
         rule = serializer.save()
         return Response(RuleSerializer(rule).data, status=status.HTTP_200_OK)
 
     def delete(self, request, rule_id: int):
-        Rule.objects.filter(pk=rule_id).delete()
+        rule = self.get_object_or_404(request, queryset=Rule.objects.all(), pk=rule_id)
+        rule.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

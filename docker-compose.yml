@@ -19,6 +19,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     command: >
       sh -c "cd backend &&
              python manage.py migrate &&
@@ -26,6 +27,7 @@ services:
     env_file:
       - .env
     environment:
+      HOME: /tmp
       DATABASE_URL: ${DATABASE_URL:-postgresql://alarm:alarm@db:5432/alarm_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -41,9 +43,13 @@ services:
   frontend:
     image: node:20
     working_dir: /app/frontend
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     command: >
       sh -c "npm install &&
              npm run dev -- --host 0.0.0.0 --port 5428"
+    environment:
+      HOME: /tmp
+      NPM_CONFIG_CACHE: /tmp/.npm
     ports:
       - "5428:5428"
     volumes:

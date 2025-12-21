@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { alarmService, homeAssistantService, sensorsService } from '@/services'
 import { useAuthStore } from '@/stores'
-import { useWebSocket } from '@/hooks'
+import type { WebSocketStatus } from '@/types'
 import { queryKeys } from '@/types'
 
 function formatTimestamp(value?: string | null): string {
@@ -19,7 +19,13 @@ function formatTimestamp(value?: string | null): string {
 export function SystemStatusCard() {
   const queryClient = useQueryClient()
   const { isAuthenticated } = useAuthStore()
-  const ws = useWebSocket()
+  const wsStatusQuery = useQuery<WebSocketStatus>({
+    queryKey: queryKeys.websocket.status,
+    queryFn: async () => 'disconnected' as WebSocketStatus,
+    initialData: 'disconnected',
+    enabled: false,
+  })
+  const wsStatus = wsStatusQuery.data
 
   const alarmStateQuery = useQuery({
     queryKey: queryKeys.alarm.state,
@@ -51,7 +57,7 @@ export function SystemStatusCard() {
     (haQuery.isError ? { configured: true, reachable: false, error: 'Failed to check status' } : null)
 
   const statusLabel = useMemo(() => {
-    switch (ws.status) {
+    switch (wsStatus) {
       case 'connected':
         return 'Connected'
       case 'connecting':
@@ -62,9 +68,9 @@ export function SystemStatusCard() {
       default:
         return 'Offline'
     }
-  }, [ws.status])
+  }, [wsStatus])
 
-  const StatusIcon = ws.status === 'connected' ? Wifi : WifiOff
+  const StatusIcon = wsStatus === 'connected' ? Wifi : WifiOff
 
   return (
     <Card>
@@ -77,7 +83,7 @@ export function SystemStatusCard() {
             <StatusIcon
               className={cn(
                 'h-4 w-4',
-                ws.status === 'connected' ? 'text-emerald-500' : 'text-muted-foreground'
+                wsStatus === 'connected' ? 'text-emerald-500' : 'text-muted-foreground'
               )}
             />
             <span className="text-sm">{statusLabel}</span>

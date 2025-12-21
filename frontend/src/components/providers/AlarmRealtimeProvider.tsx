@@ -2,10 +2,11 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores'
 import { wsManager } from '@/services'
-import type { AlarmEvent, AlarmStateSnapshot, CountdownPayload, AlarmWebSocketMessage } from '@/types'
+import type { AlarmEvent, AlarmStateSnapshot, CountdownPayload, AlarmWebSocketMessage, WebSocketStatus } from '@/types'
 import { queryKeys } from '@/types'
 
 let unsubscribeMessages: (() => void) | null = null
+let unsubscribeStatus: (() => void) | null = null
 
 function upsertRecentEvent(prev: AlarmEvent[] | undefined, nextEvent: AlarmEvent): AlarmEvent[] {
   const existing = Array.isArray(prev) ? prev : []
@@ -20,12 +21,23 @@ export function AlarmRealtimeProvider() {
   useEffect(() => {
     if (!isAuthenticated) {
       wsManager.disconnect()
+      queryClient.setQueryData(queryKeys.websocket.status, 'disconnected' as WebSocketStatus)
       if (unsubscribeMessages) {
         unsubscribeMessages()
         unsubscribeMessages = null
       }
+      if (unsubscribeStatus) {
+        unsubscribeStatus()
+        unsubscribeStatus = null
+      }
       queryClient.setQueryData(queryKeys.alarm.countdown, null)
       return
+    }
+
+    if (!unsubscribeStatus) {
+      unsubscribeStatus = wsManager.onStatusChange((status) => {
+        queryClient.setQueryData(queryKeys.websocket.status, status)
+      })
     }
 
     if (!unsubscribeMessages) {
@@ -55,9 +67,14 @@ export function AlarmRealtimeProvider() {
 
     return () => {
       wsManager.disconnect()
+      queryClient.setQueryData(queryKeys.websocket.status, 'disconnected' as WebSocketStatus)
       if (unsubscribeMessages) {
         unsubscribeMessages()
         unsubscribeMessages = null
+      }
+      if (unsubscribeStatus) {
+        unsubscribeStatus()
+        unsubscribeStatus = null
       }
       queryClient.setQueryData(queryKeys.alarm.countdown, null)
     }
@@ -67,4 +84,3 @@ export function AlarmRealtimeProvider() {
 }
 
 export default AlarmRealtimeProvider
-

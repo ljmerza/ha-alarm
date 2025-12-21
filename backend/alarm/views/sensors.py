@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from alarm.models import Sensor
 from alarm.serializers import SensorCreateSerializer, SensorSerializer, SensorUpdateSerializer
 from alarm.use_cases.sensor_context import sensor_detail_serializer_context, sensor_list_serializer_context
+from config.view_utils import ObjectPermissionMixin
 
 
 class SensorsView(APIView):
@@ -22,14 +23,14 @@ class SensorsView(APIView):
         return Response(SensorSerializer(sensor).data, status=status.HTTP_201_CREATED)
 
 
-class SensorDetailView(APIView):
+class SensorDetailView(ObjectPermissionMixin, APIView):
     def get(self, request, sensor_id: int):
-        sensor = Sensor.objects.get(pk=sensor_id)
+        sensor = self.get_object_or_404(request, queryset=Sensor.objects.all(), pk=sensor_id)
         context = sensor_detail_serializer_context(sensor=sensor, prefer_home_assistant_live_state=True)
         return Response(SensorSerializer(sensor, context=context).data)
 
     def patch(self, request, sensor_id: int):
-        sensor = Sensor.objects.get(pk=sensor_id)
+        sensor = self.get_object_or_404(request, queryset=Sensor.objects.all(), pk=sensor_id)
         serializer = SensorUpdateSerializer(sensor, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         sensor = serializer.save()
@@ -37,7 +38,6 @@ class SensorDetailView(APIView):
         return Response(SensorSerializer(sensor, context=context).data, status=status.HTTP_200_OK)
 
     def delete(self, request, sensor_id: int):
-        sensor = Sensor.objects.get(pk=sensor_id)
+        sensor = self.get_object_or_404(request, queryset=Sensor.objects.all(), pk=sensor_id)
         sensor.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-

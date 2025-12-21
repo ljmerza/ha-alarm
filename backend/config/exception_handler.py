@@ -18,9 +18,9 @@ def custom_exception_handler(exc, context):
         return response
 
     # Local imports to avoid import-time side effects.
-    from alarm import home_assistant
     from alarm.state_machine.errors import TransitionError
     from config import domain_exceptions as domain
+    from alarm.gateways.home_assistant import HomeAssistantNotConfigured, HomeAssistantNotReachable
 
     if isinstance(exc, domain.ValidationError):
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -33,9 +33,9 @@ def custom_exception_handler(exc, context):
     if isinstance(exc, domain.ConflictError):
         return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
 
-    if isinstance(exc, home_assistant.HomeAssistantNotConfigured):
+    if isinstance(exc, HomeAssistantNotConfigured):
         return Response({"detail": str(exc) or "Home Assistant is not configured."}, status=status.HTTP_400_BAD_REQUEST)
-    if isinstance(exc, home_assistant.HomeAssistantNotReachable):
+    if isinstance(exc, HomeAssistantNotReachable):
         return Response(
             {"detail": "Home Assistant is not reachable.", "error": getattr(exc, "error", None)},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,

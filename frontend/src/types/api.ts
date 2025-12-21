@@ -87,4 +87,7 @@ export const queryKeys = {
     status: ['homeAssistant', 'status'] as const,
     entities: ['homeAssistant', 'entities'] as const,
   },
+  websocket: {
+    status: ['websocket', 'status'] as const,
+  },
 }

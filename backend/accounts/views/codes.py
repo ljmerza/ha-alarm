@@ -10,6 +10,7 @@ from accounts.permissions import IsAdminOrSelf, IsAdminRole
 from accounts.serializers import UserCodeCreateSerializer, UserCodeSerializer, UserCodeUpdateSerializer
 from accounts.use_cases import codes as codes_uc
 from accounts.use_cases import user_codes as user_codes_uc
+from config.view_utils import ObjectPermissionMixin
 
 
 class CodesView(APIView):
@@ -60,7 +61,7 @@ class CodesView(APIView):
         return Response(UserCodeSerializer(code).data, status=status.HTTP_201_CREATED)
 
 
-class CodeDetailView(APIView):
+class CodeDetailView(ObjectPermissionMixin, APIView):
     def get_permissions(self):
         method = getattr(self.request, "method", "").upper()
         if method == "PATCH":
@@ -70,8 +71,11 @@ class CodeDetailView(APIView):
         return super().get_permissions()
 
     def get(self, request, code_id: int):
-        code = codes_uc.get_code_for_read(code_id=code_id)
-        self.check_object_permissions(request, code)
+        code = self.get_object_or_404(
+            request=request,
+            queryset=UserCode.objects.select_related("user").prefetch_related("allowed_states"),
+            id=code_id,
+        )
         return Response(UserCodeSerializer(code).data, status=status.HTTP_200_OK)
 
     def patch(self, request, code_id: int):

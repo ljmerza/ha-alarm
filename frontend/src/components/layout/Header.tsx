@@ -2,8 +2,8 @@ import { Menu, Bell, User, LogOut, Moon, Sun, Monitor, House } from 'lucide-reac
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore, useUIStore } from '@/stores'
-import { useWebSocket } from '@/hooks'
 import { alarmService } from '@/services'
+import type { WebSocketStatus } from '@/types'
 import { queryKeys } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +13,6 @@ import { AlarmStateLabels, AlarmState, Routes } from '@/lib/constants'
 export function Header() {
   const { user, logout, isAuthenticated } = useAuthStore()
   const { toggleSidebar, theme, setTheme, isMobile } = useUIStore()
-  const ws = useWebSocket()
 
   const alarmStateQuery = useQuery({
     queryKey: queryKeys.alarm.state,
@@ -21,6 +20,14 @@ export function Header() {
     enabled: isAuthenticated,
   })
   const alarmState = alarmStateQuery.data ?? null
+
+  const wsStatusQuery = useQuery<WebSocketStatus>({
+    queryKey: queryKeys.websocket.status,
+    queryFn: async () => 'disconnected' as WebSocketStatus,
+    initialData: 'disconnected',
+    enabled: false,
+  })
+  const wsStatus = wsStatusQuery.data
 
   const currentState = alarmState?.currentState ?? AlarmState.DISARMED
 
@@ -65,9 +72,9 @@ export function Header() {
         <Badge variant={getStateBadgeVariant()} className="text-xs">
           {AlarmStateLabels[currentState]}
         </Badge>
-        {ws.status !== 'connected' && (
+        {wsStatus !== 'connected' && (
           <Badge variant="outline" className="text-xs text-muted-foreground">
-            {ws.status === 'connecting' ? 'Connecting...' : 'Offline'}
+            {wsStatus === 'connecting' ? 'Connecting...' : 'Offline'}
           </Badge>
         )}
       </div>

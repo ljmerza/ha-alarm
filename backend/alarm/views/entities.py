@@ -4,8 +4,11 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from alarm import home_assistant
-from alarm.gateways.home_assistant import default_home_assistant_gateway
+from alarm.gateways.home_assistant import (
+    HomeAssistantNotConfigured,
+    HomeAssistantNotReachable,
+    default_home_assistant_gateway,
+)
 from alarm.models import Entity
 from alarm.serializers import EntitySerializer
 from alarm.use_cases.entity_sync import sync_entities_from_home_assistant
@@ -19,7 +22,15 @@ class EntitiesView(APIView):
 
 class EntitySyncView(APIView):
     def post(self, request):
-        default_home_assistant_gateway.ensure_available()
+        try:
+            default_home_assistant_gateway.ensure_available()
+        except HomeAssistantNotConfigured as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except HomeAssistantNotReachable as exc:
+            return Response(
+                {"detail": "Home Assistant is not reachable.", "error": exc.error},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         try:
             items = default_home_assistant_gateway.list_entities()
         except Exception as exc:

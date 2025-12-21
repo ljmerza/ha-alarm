@@ -4,8 +4,11 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from alarm import home_assistant
-from alarm.gateways.home_assistant import default_home_assistant_gateway
+from alarm.gateways.home_assistant import (
+    HomeAssistantNotConfigured,
+    HomeAssistantNotReachable,
+    default_home_assistant_gateway,
+)
 
 
 class HomeAssistantStatusView(APIView):
@@ -16,7 +19,15 @@ class HomeAssistantStatusView(APIView):
 
 class HomeAssistantEntitiesView(APIView):
     def get(self, request):
-        default_home_assistant_gateway.ensure_available()
+        try:
+            default_home_assistant_gateway.ensure_available()
+        except HomeAssistantNotConfigured as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except HomeAssistantNotReachable as exc:
+            return Response(
+                {"detail": "Home Assistant is not reachable.", "error": exc.error},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         try:
             entities = default_home_assistant_gateway.list_entities()
         except Exception as exc:

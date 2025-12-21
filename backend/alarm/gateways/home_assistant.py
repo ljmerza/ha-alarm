@@ -6,6 +6,20 @@ from typing import Any, Protocol
 from alarm import home_assistant
 
 
+class HomeAssistantGatewayError(RuntimeError):
+    pass
+
+
+class HomeAssistantNotConfigured(HomeAssistantGatewayError):
+    pass
+
+
+class HomeAssistantNotReachable(HomeAssistantGatewayError):
+    def __init__(self, error: str | None = None):
+        self.error = error
+        super().__init__(error or "Home Assistant is not reachable.")
+
+
 class HomeAssistantGateway(Protocol):
     def get_status(self, *, timeout_seconds: float = 2.0) -> home_assistant.HomeAssistantStatus: ...
 
@@ -34,7 +48,12 @@ class DefaultHomeAssistantGateway:
         return home_assistant.get_status(timeout_seconds=timeout_seconds)
 
     def ensure_available(self, *, timeout_seconds: float = 2.0) -> home_assistant.HomeAssistantStatus:
-        return home_assistant.ensure_available(timeout_seconds=timeout_seconds)
+        try:
+            return home_assistant.ensure_available(timeout_seconds=timeout_seconds)
+        except home_assistant.HomeAssistantNotConfigured as exc:
+            raise HomeAssistantNotConfigured(str(exc) or "Home Assistant is not configured.") from exc
+        except home_assistant.HomeAssistantNotReachable as exc:
+            raise HomeAssistantNotReachable(getattr(exc, "error", None)) from exc
 
     def list_entities(self, *, timeout_seconds: float = 5.0) -> list[dict[str, Any]]:
         return home_assistant.list_entities(timeout_seconds=timeout_seconds)

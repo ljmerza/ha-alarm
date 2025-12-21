@@ -105,8 +105,10 @@ class UserCodeSerializer(serializers.ModelSerializer):
         return user.email
 
     def get_allowed_states(self, obj: UserCode) -> list[str]:
-        qs = obj.allowed_states.all()
-        return sorted({row.state for row in qs})
+        prefetched = getattr(obj, "_prefetched_objects_cache", {}) or {}
+        if "allowed_states" not in prefetched:
+            raise RuntimeError("UserCode.allowed_states must be prefetched for serialization.")
+        return sorted({row.state for row in obj.allowed_states.all()})
 
 
 DEFAULT_CODE_ALLOWED_STATES = [
