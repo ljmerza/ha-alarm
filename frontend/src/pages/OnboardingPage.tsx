@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { onboardingService } from '@/services'
 import { useOnboardingStore } from '@/stores'
 import { Routes } from '@/lib/constants'
+import { getErrorMessage } from '@/lib/errors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -49,12 +50,7 @@ export function OnboardingPage() {
       setOnboardingRequired(false)
       navigate(Routes.LOGIN)
     } catch (err) {
-      if (err && typeof err === 'object') {
-        const anyErr = err as { message?: string; detail?: string }
-        setError(anyErr.detail || anyErr.message || 'Onboarding failed')
-      } else {
-        setError('Onboarding failed')
-      }
+      setError(getErrorMessage(err) || 'Onboarding failed')
     } finally {
       setIsSubmitting(false)
     }

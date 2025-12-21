@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Routes, AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
 import type { AlarmStateType } from '@/lib/constants'
+import { getErrorMessage } from '@/lib/errors'
 import { codesService } from '@/services'
 import { useAuthStore, useSetupStore } from '@/stores'
 import { Input } from '@/components/ui/input'
@@ -72,12 +73,7 @@ export function SetupWizardPage() {
       await checkStatus()
       navigate(Routes.HOME, { replace: true })
     } catch (err) {
-      if (err && typeof err === 'object') {
-        const anyErr = err as { message?: string; detail?: string }
-        setError(anyErr.detail || anyErr.message || 'Failed to create code')
-      } else {
-        setError('Failed to create code')
-      }
+      setError(getErrorMessage(err) || 'Failed to create code')
     }
   }
 

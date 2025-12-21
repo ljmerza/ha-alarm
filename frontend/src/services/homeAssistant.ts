@@ -23,12 +23,8 @@ export const homeAssistantService = {
   },
 
   async listEntities(): Promise<HomeAssistantEntity[]> {
-    const response = await api.get<{ data: HomeAssistantEntity[] }>(
-      '/api/alarm/home-assistant/entities/'
-    )
-    return response.data
+    return api.getData<HomeAssistantEntity[]>('/api/alarm/home-assistant/entities/')
   },
 }
 
 export default homeAssistantService
-

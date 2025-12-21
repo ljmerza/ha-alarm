@@ -14,6 +14,8 @@ import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { DatalistInput } from '@/components/ui/datalist-input'
 import { EmptyState } from '@/components/ui/empty-state'
+import { getErrorMessage } from '@/lib/errors'
+import type { RuleSimulateResult } from '@/types'
 
 type Row = { id: string; entityId: string; state: string }
 
@@ -38,11 +40,7 @@ type SimulatedRule = {
   for?: { status?: string; seconds?: number } | null
 }
 
-type SimulationResult = {
-  summary?: { evaluated: number; matched: number; wouldSchedule: number }
-  matchedRules?: SimulatedRule[]
-  nonMatchingRules?: SimulatedRule[]
-}
+type SimulationResult = RuleSimulateResult
 
 const storageKey = 'alarm_rules_test_scenarios'
 
@@ -98,8 +96,7 @@ export function RulesTestPage() {
       const list = await entitiesService.list()
       setEntities(list)
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Failed to load entities')
+      setError(getErrorMessage(err) || 'Failed to load entities')
     } finally {
       setIsLoading(false)
     }
@@ -116,9 +113,8 @@ export function RulesTestPage() {
         setEntities(list)
       })
       .catch((err) => {
-        const anyErr = err as { message?: string }
         if (!mounted) return
-        setError(anyErr.message || 'Failed to load entities')
+        setError(getErrorMessage(err) || 'Failed to load entities')
       })
       .finally(() => {
         if (!mounted) return
@@ -136,8 +132,7 @@ export function RulesTestPage() {
       await entitiesService.sync()
       await refreshEntities()
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Failed to sync entities')
+      setError(getErrorMessage(err) || 'Failed to sync entities')
       setIsLoading(false)
     }
   }
@@ -190,8 +185,7 @@ export function RulesTestPage() {
       const res = await rulesService.simulate({ entityStates, assumeForSeconds: assume })
       setResult(res as SimulationResult)
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Simulation failed')
+      setError(getErrorMessage(err) || 'Simulation failed')
     } finally {
       setIsRunning(false)
     }
@@ -214,8 +208,7 @@ export function RulesTestPage() {
       setBaselineResult(base as SimulationResult)
       setResult(changed as SimulationResult)
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Simulation failed')
+      setError(getErrorMessage(err) || 'Simulation failed')
     } finally {
       setIsRunning(false)
     }

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from django.contrib.auth.password_validation import validate_password
-from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
 
 from .models import User, UserCode, UserCodeAllowedState
@@ -190,31 +189,6 @@ class UserCodeCreateSerializer(serializers.Serializer):
                 )
         return attrs
 
-    def create(self, validated_data):
-        validated_data.pop("reauth_password", None)
-        raw = validated_data["code"]
-        user = self.context["target_user"]
-        code_type = validated_data.get("code_type", UserCode.CodeType.PERMANENT)
-        code = UserCode.objects.create(
-            user=user,
-            code_hash=make_password(raw),
-            label=validated_data.get("label", ""),
-            code_type=code_type,
-            pin_length=len(raw),
-            is_active=True,
-            start_at=validated_data.get("start_at"),
-            end_at=validated_data.get("end_at"),
-            days_of_week=validated_data.get("days_of_week"),
-            window_start=validated_data.get("window_start"),
-            window_end=validated_data.get("window_end"),
-        )
-        allowed_states = validated_data.get("allowed_states") or DEFAULT_CODE_ALLOWED_STATES
-        UserCodeAllowedState.objects.bulk_create(
-            [UserCodeAllowedState(code=code, state=state) for state in allowed_states],
-            ignore_conflicts=True,
-        )
-        return code
-
 
 class UserCodeUpdateSerializer(serializers.Serializer):
     reauth_password = serializers.CharField(write_only=True)
@@ -239,71 +213,50 @@ class UserCodeUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Code must be 4 to 8 digits.")
         return code
 
-    def update(self, instance: UserCode, validated_data):
-        validated_data.pop("reauth_password", None)
-        raw = validated_data.pop("code", None)
-        if raw:
-            instance.code_hash = make_password(raw)
-            instance.pin_length = len(raw)
-        if "label" in validated_data:
-            instance.label = validated_data["label"]
-        if "is_active" in validated_data:
-            instance.is_active = validated_data["is_active"]
-        if (
-            "start_at" in validated_data
-            or "end_at" in validated_data
-            or "days_of_week" in validated_data
-            or "window_start" in validated_data
-            or "window_end" in validated_data
-        ):
-            if instance.code_type != UserCode.CodeType.TEMPORARY:
-                raise serializers.ValidationError(
-                    {"code_type": "Only temporary codes can set an active time range."}
-                )
-            start_at = validated_data.get("start_at", instance.start_at)
-            end_at = validated_data.get("end_at", instance.end_at)
-            if start_at and end_at and start_at > end_at:
-                raise serializers.ValidationError(
-                    {"end_at": "end_at must be after or equal to start_at."}
-                )
-            days_of_week = validated_data.get("days_of_week", instance.days_of_week)
-            if days_of_week is not None:
-                if days_of_week < 0 or days_of_week > 127:
-                    raise serializers.ValidationError(
-                        {"days_of_week": "days_of_week must be between 0 and 127."}
-                    )
-                if days_of_week == 0:
-                    raise serializers.ValidationError(
-                        {"days_of_week": "Select at least one day."}
-                    )
-            window_start = validated_data.get("window_start", instance.window_start)
-            window_end = validated_data.get("window_end", instance.window_end)
-            if (window_start is None) != (window_end is None):
-                raise serializers.ValidationError(
-                    {"window_start": "window_start and window_end must be set together."}
-                )
-            if window_start is not None and window_end is not None and window_start >= window_end:
-                raise serializers.ValidationError(
-                    {"window_end": "window_end must be after window_start (same-day window)."}
-                )
-            if "start_at" in validated_data:
-                instance.start_at = validated_data["start_at"]
-            if "end_at" in validated_data:
-                instance.end_at = validated_data["end_at"]
-            if "days_of_week" in validated_data:
-                instance.days_of_week = validated_data["days_of_week"]
-            if "window_start" in validated_data:
-                instance.window_start = validated_data["window_start"]
-            if "window_end" in validated_data:
-                instance.window_end = validated_data["window_end"]
-        instance.save()
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance: UserCode | None = getattr(self, "instance", None)
+        if instance is None:
+            return attrs
 
-        if "allowed_states" in validated_data:
-            new_states = validated_data.get("allowed_states") or []
-            instance.allowed_states.all().delete()
-            UserCodeAllowedState.objects.bulk_create(
-                [UserCodeAllowedState(code=instance, state=state) for state in new_states],
-                ignore_conflicts=True,
+        updates_time_range = any(
+            key in attrs for key in ["start_at", "end_at", "days_of_week", "window_start", "window_end"]
+        )
+        if not updates_time_range:
+            return attrs
+
+        if instance.code_type != UserCode.CodeType.TEMPORARY:
+            raise serializers.ValidationError(
+                {"code_type": "Only temporary codes can set an active time range."}
             )
 
-        return instance
+        start_at = attrs.get("start_at", instance.start_at)
+        end_at = attrs.get("end_at", instance.end_at)
+        if start_at and end_at and start_at > end_at:
+            raise serializers.ValidationError(
+                {"end_at": "end_at must be after or equal to start_at."}
+            )
+
+        days_of_week = attrs.get("days_of_week", instance.days_of_week)
+        if days_of_week is not None:
+            if days_of_week < 0 or days_of_week > 127:
+                raise serializers.ValidationError(
+                    {"days_of_week": "days_of_week must be between 0 and 127."}
+                )
+            if days_of_week == 0:
+                raise serializers.ValidationError(
+                    {"days_of_week": "Select at least one day."}
+                )
+
+        window_start = attrs.get("window_start", instance.window_start)
+        window_end = attrs.get("window_end", instance.window_end)
+        if (window_start is None) != (window_end is None):
+            raise serializers.ValidationError(
+                {"window_start": "window_start and window_end must be set together."}
+            )
+        if window_start is not None and window_end is not None and window_start >= window_end:
+            raise serializers.ValidationError(
+                {"window_end": "window_end must be after window_start (same-day window)."}
+            )
+
+        return attrs

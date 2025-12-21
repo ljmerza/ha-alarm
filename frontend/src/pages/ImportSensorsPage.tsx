@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, Search, Shield, Loader2 } from 'lucide-react'
 import { Routes } from '@/lib/constants'
+import { getErrorMessage } from '@/lib/errors'
 import { homeAssistantService, sensorsService } from '@/services'
 import { useAlarmStore } from '@/stores'
 import type { HomeAssistantEntity } from '@/services/homeAssistant'
@@ -167,12 +168,7 @@ export function ImportSensorsPage() {
       setSelected({})
       setSuccess({ count: importedNames.length, names: importedNames.slice(0, 5) })
     } catch (err) {
-      if (err && typeof err === 'object') {
-        const anyErr = err as { message?: string; detail?: string }
-        setError(anyErr.detail || anyErr.message || 'Failed to import sensors')
-      } else {
-        setError('Failed to import sensors')
-      }
+      setError(getErrorMessage(err) || 'Failed to import sensors')
     } finally {
       setIsSubmitting(false)
       setSubmitProgress(null)

@@ -36,6 +36,7 @@ function transformKeysDeep(value: unknown, transformKey: (key: string) => string
 
 class ApiClient {
   private baseUrl: string
+  private refreshPromise: Promise<void> | null = null
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl
@@ -54,6 +55,112 @@ class ApiClient {
   private getAuthHeaders(): HeadersInit {
     const token = localStorage.getItem(StorageKeys.AUTH_TOKEN)
     return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
+  private async refreshTokens(): Promise<void> {
+    if (this.refreshPromise) {
+      return this.refreshPromise
+    }
+
+    const refreshToken = localStorage.getItem(StorageKeys.REFRESH_TOKEN)
+    if (!refreshToken) {
+      throw new Error('No refresh token available')
+    }
+
+    this.refreshPromise = (async () => {
+      const response = await fetch(this.resolveUrl('/api/auth/token/refresh/'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh: refreshToken }),
+      })
+
+      // If refresh fails, clear tokens so callers can treat as logged out
+      if (!response.ok) {
+        localStorage.removeItem(StorageKeys.AUTH_TOKEN)
+        localStorage.removeItem(StorageKeys.REFRESH_TOKEN)
+        throw new Error('Token refresh failed')
+      }
+
+      const json = await response.json().catch(() => ({}))
+      const transformed = transformKeysDeep(json, toCamelCaseKey) as Record<string, unknown>
+      const accessToken = typeof transformed.accessToken === 'string' ? transformed.accessToken : null
+      const nextRefreshToken =
+        typeof transformed.refreshToken === 'string' ? transformed.refreshToken : refreshToken
+
+      if (!accessToken) {
+        localStorage.removeItem(StorageKeys.AUTH_TOKEN)
+        localStorage.removeItem(StorageKeys.REFRESH_TOKEN)
+        throw new Error('Token refresh failed')
+      }
+
+      localStorage.setItem(StorageKeys.AUTH_TOKEN, accessToken)
+      localStorage.setItem(StorageKeys.REFRESH_TOKEN, nextRefreshToken)
+    })().finally(() => {
+      this.refreshPromise = null
+    })
+
+    return this.refreshPromise
+  }
+
+  private async request<T>(
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+    endpoint: string,
+    options?: {
+      params?: Record<string, string | number | boolean | undefined>
+      data?: unknown
+    }
+  ): Promise<T> {
+    const buildUrl = (): URL => {
+      const url = new URL(this.resolveUrl(endpoint))
+      if (options?.params) {
+        const snakeParams = transformKeysDeep(options.params, toSnakeCaseKey) as Record<
+          string,
+          string | number | boolean | undefined
+        >
+        Object.entries(snakeParams).forEach(([key, value]) => {
+          if (value !== undefined) url.searchParams.append(key, String(value))
+        })
+      }
+      return url
+    }
+
+    const doFetch = async (): Promise<Response> => {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+      }
+      return fetch(buildUrl().toString(), {
+        method,
+        headers,
+        body:
+          method === 'GET' || method === 'DELETE'
+            ? undefined
+            : options?.data
+              ? JSON.stringify(transformKeysDeep(options.data, toSnakeCaseKey))
+              : undefined,
+      })
+    }
+
+    let response = await doFetch()
+
+    const isUnauthorized = response.status === 401
+    const canAttemptRefresh =
+      isUnauthorized &&
+      endpoint !== '/api/auth/login/' &&
+      endpoint !== '/api/auth/logout/' &&
+      endpoint !== '/api/auth/token/refresh/' &&
+      !!localStorage.getItem(StorageKeys.REFRESH_TOKEN)
+
+    if (canAttemptRefresh) {
+      try {
+        await this.refreshTokens()
+        response = await doFetch()
+      } catch {
+        // fall through and let handleResponse surface the original/next error
+      }
+    }
+
+    return this.handleResponse<T>(response)
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -103,79 +210,36 @@ class ApiClient {
   }
 
   async get<T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
-    const url = new URL(this.resolveUrl(endpoint))
-    if (params) {
-      const snakeParams = transformKeysDeep(params, toSnakeCaseKey) as Record<
-        string,
-        string | number | boolean | undefined
-      >
-      Object.entries(snakeParams).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.append(key, String(value))
-        }
-      })
-    }
+    return this.request<T>('GET', endpoint, { params })
+  }
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-      },
-    })
-
-    return this.handleResponse<T>(response)
+  async getData<T>(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): Promise<T> {
+    const response = await this.get<{ data: T }>(endpoint, params)
+    return response.data
   }
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await fetch(this.resolveUrl(endpoint), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-      },
-      body: data ? JSON.stringify(transformKeysDeep(data, toSnakeCaseKey)) : undefined,
-    })
+    return this.request<T>('POST', endpoint, { data })
+  }
 
-    return this.handleResponse<T>(response)
+  async postData<T>(endpoint: string, data?: unknown): Promise<T> {
+    const response = await this.post<{ data: T }>(endpoint, data)
+    return response.data
   }
 
   async put<T>(endpoint: string, data: unknown): Promise<T> {
-    const response = await fetch(this.resolveUrl(endpoint), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-      },
-      body: JSON.stringify(transformKeysDeep(data, toSnakeCaseKey)),
-    })
-
-    return this.handleResponse<T>(response)
+    return this.request<T>('PUT', endpoint, { data })
   }
 
   async patch<T>(endpoint: string, data: unknown): Promise<T> {
-    const response = await fetch(this.resolveUrl(endpoint), {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-      },
-      body: JSON.stringify(transformKeysDeep(data, toSnakeCaseKey)),
-    })
-
-    return this.handleResponse<T>(response)
+    return this.request<T>('PATCH', endpoint, { data })
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    const response = await fetch(this.resolveUrl(endpoint), {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-      },
-    })
-
-    return this.handleResponse<T>(response)
+    return this.request<T>('DELETE', endpoint)
   }
 }
 

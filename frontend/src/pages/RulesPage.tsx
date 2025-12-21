@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/switch'
 import { Pill } from '@/components/ui/pill'
 import { DatalistInput } from '@/components/ui/datalist-input'
 import { EmptyState } from '@/components/ui/empty-state'
+import { getErrorMessage } from '@/lib/errors'
 
 const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'trigger', label: 'Trigger' },
@@ -173,8 +174,7 @@ export function RulesPage() {
       setRules(rulesList)
       setEntities(entitiesList)
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Failed to load rules')
+      setError(getErrorMessage(err) || 'Failed to load rules')
     } finally {
       setIsLoading(false)
     }
@@ -193,8 +193,7 @@ export function RulesPage() {
       const entitiesList = await entitiesService.list()
       setEntities(entitiesList)
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Failed to sync entities')
+      setError(getErrorMessage(err) || 'Failed to sync entities')
     }
   }
 
@@ -209,8 +208,7 @@ export function RulesPage() {
       )
       await load()
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Failed to run rules')
+      setError(getErrorMessage(err) || 'Failed to run rules')
     } finally {
       setIsSaving(false)
     }
@@ -375,8 +373,7 @@ export function RulesPage() {
       await load()
       resetForm()
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Failed to save rule')
+      setError(getErrorMessage(err) || 'Failed to save rule')
     } finally {
       setIsSaving(false)
     }
@@ -393,8 +390,7 @@ export function RulesPage() {
       await load()
       resetForm()
     } catch (err) {
-      const anyErr = err as { message?: string }
-      setError(anyErr.message || 'Failed to delete rule')
+      setError(getErrorMessage(err) || 'Failed to delete rule')
     } finally {
       setIsSaving(false)
     }

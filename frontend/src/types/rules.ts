@@ -30,3 +30,39 @@ export interface Rule {
   updatedAt: string
 }
 
+export interface RuleRunResult {
+  evaluated: number
+  fired: number
+  scheduled: number
+  skippedCooldown: number
+  errors: number
+}
+
+export interface RuleSimulateRequest {
+  entityStates: Record<string, string>
+  assumeForSeconds?: number
+}
+
+export interface RuleSimulateForInfo {
+  seconds: number
+  status: string
+  assumedForSeconds?: number
+}
+
+export interface RuleSimulateEntry {
+  id: number
+  name: string
+  kind: RuleKind
+  priority: number
+  matched: boolean
+  for?: RuleSimulateForInfo | null
+  trace: Record<string, unknown>
+  actions: unknown[]
+}
+
+export interface RuleSimulateResult {
+  timestamp: string
+  summary: { evaluated: number; matched: number; wouldSchedule: number }
+  matchedRules: RuleSimulateEntry[]
+  nonMatchingRules: RuleSimulateEntry[]
+}

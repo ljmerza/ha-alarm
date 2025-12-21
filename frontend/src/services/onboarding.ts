@@ -31,28 +31,11 @@ export interface OnboardingResponse {
 
 export const onboardingService = {
   async status(): Promise<OnboardingStatus> {
-    const response = await api.get<{ onboardingRequired: boolean }>('/api/onboarding/')
-    return { onboardingRequired: response.onboardingRequired }
+    return api.get<OnboardingStatus>('/api/onboarding/')
   },
 
   async create(payload: OnboardingRequest): Promise<OnboardingResponse> {
-    const response = await api.post<{
-      userId: string
-      email: string
-      homeName: string
-      timezone: string
-    }>('/api/onboarding/', {
-      email: payload.email,
-      password: payload.password,
-      homeName: payload.homeName,
-    })
-
-    return {
-      userId: response.userId,
-      email: response.email,
-      homeName: response.homeName,
-      timezone: response.timezone,
-    }
+    return api.post<OnboardingResponse>('/api/onboarding/', payload)
   },
 
   async setupStatus(): Promise<SetupStatus> {
