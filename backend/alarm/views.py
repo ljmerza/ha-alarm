@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from django.core.paginator import Paginator
-from django.db.models import Max
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -11,7 +9,10 @@ from rest_framework.views import APIView
 from . import services
 from . import home_assistant
 from . import rules_engine
-from .models import AlarmEvent, AlarmEventType, AlarmSettingsProfile, AlarmState, Entity, Rule, RuleEntityRef, Sensor
+from .use_cases import alarm_actions
+from .use_cases.entity_sync import sync_entities_from_home_assistant
+from .use_cases.sensor_context import sensor_detail_serializer_context, sensor_list_serializer_context
+from .models import AlarmEvent, AlarmSettingsProfile, AlarmState, Entity, Rule, Sensor
 from .serializers import (
     AlarmEventSerializer,
     AlarmSettingsProfileSerializer,
@@ -39,19 +40,19 @@ class HomeAssistantStatusView(APIView):
 
 class HomeAssistantEntitiesView(APIView):
     def get(self, request):
-        status_obj = home_assistant.get_status()
-        if not status_obj.configured:
+        try:
+            home_assistant.ensure_available()
+            entities = home_assistant.list_entities()
+        except home_assistant.HomeAssistantNotConfigured:
             return Response(
                 {"detail": "Home Assistant is not configured."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if not status_obj.reachable:
+        except home_assistant.HomeAssistantNotReachable as exc:
             return Response(
-                {"detail": "Home Assistant is not reachable.", "error": status_obj.error},
+                {"detail": "Home Assistant is not reachable.", "error": exc.error},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        try:
-            entities = home_assistant.list_entities()
         except Exception as exc:
             return Response(
                 {"detail": "Failed to fetch Home Assistant entities.", "error": str(exc)},
@@ -68,63 +69,26 @@ class EntitiesView(APIView):
 
 class EntitySyncView(APIView):
     def post(self, request):
-        status_obj = home_assistant.get_status()
-        if not status_obj.configured:
+        try:
+            home_assistant.ensure_available()
+            items = home_assistant.list_entities()
+        except home_assistant.HomeAssistantNotConfigured:
             return Response(
                 {"detail": "Home Assistant is not configured."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if not status_obj.reachable:
+        except home_assistant.HomeAssistantNotReachable as exc:
             return Response(
-                {"detail": "Home Assistant is not reachable.", "error": status_obj.error},
+                {"detail": "Home Assistant is not reachable.", "error": exc.error},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-
-        now = timezone.now()
-        imported = 0
-        updated = 0
-        try:
-            items = home_assistant.list_entities()
         except Exception as exc:
             return Response(
                 {"detail": "Failed to fetch Home Assistant entities.", "error": str(exc)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        for item in items:
-            entity_id = item.get("entity_id")
-            domain = item.get("domain")
-            name = item.get("name")
-            if not isinstance(entity_id, str) or "." not in entity_id:
-                continue
-            if not isinstance(domain, str) or not domain:
-                domain = entity_id.split(".", 1)[0]
-            if not isinstance(name, str) or not name:
-                name = entity_id
-
-            last_changed_raw = item.get("last_changed")
-            last_changed = parse_datetime(last_changed_raw) if isinstance(last_changed_raw, str) else None
-
-            defaults = {
-                "domain": domain,
-                "name": name,
-                "device_class": item.get("device_class") if isinstance(item.get("device_class"), str) else None,
-                "last_state": item.get("state") if isinstance(item.get("state"), str) else None,
-                "last_changed": last_changed,
-                "last_seen": now,
-                "attributes": {
-                    "unit_of_measurement": item.get("unit_of_measurement"),
-                },
-                "source": "home_assistant",
-            }
-
-            obj, created = Entity.objects.update_or_create(entity_id=entity_id, defaults=defaults)
-            imported += 1 if created else 0
-            updated += 0 if created else 1
-
-        return Response(
-            {"imported": imported, "updated": updated, "timestamp": now},
-            status=status.HTTP_200_OK,
-        )
+        result = sync_entities_from_home_assistant(items=items)
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class RulesView(APIView):
@@ -216,50 +180,8 @@ class AlarmSettingsView(APIView):
 class SensorsView(APIView):
     def get(self, request):
         sensors = Sensor.objects.all()
-        entity_ids = [s.entity_id for s in sensors if s.entity_id]
-        entity_state_by_entity_id: dict[str, str | None] = {}
-        if entity_ids:
-            entity_state_by_entity_id.update(
-                Entity.objects.filter(entity_id__in=entity_ids).values_list("entity_id", "last_state")
-            )
-
-        used_entity_ids_in_rules = set(
-            RuleEntityRef.objects.filter(rule__enabled=True).values_list("entity__entity_id", flat=True)
-        )
-
-        status_obj = home_assistant.get_status()
-        if status_obj.configured and status_obj.reachable:
-            try:
-                for item in home_assistant.list_entities():
-                    entity_id = item.get("entity_id")
-                    state = item.get("state")
-                    if isinstance(entity_id, str) and entity_id:
-                        entity_state_by_entity_id[entity_id] = state if isinstance(state, str) else None
-            except Exception:
-                # Fall back to DB-backed states when HA can't be queried live.
-                pass
-
-        last_triggered_by_sensor_id = dict(
-            AlarmEvent.objects.filter(
-                event_type=AlarmEventType.SENSOR_TRIGGERED,
-                sensor__in=sensors,
-            )
-            .values("sensor_id")
-            .annotate(last_ts=Max("timestamp"))
-            .values_list("sensor_id", "last_ts")
-        )
-
-        return Response(
-            SensorSerializer(
-                sensors,
-                many=True,
-                context={
-                    "entity_state_by_entity_id": entity_state_by_entity_id,
-                    "last_triggered_by_sensor_id": last_triggered_by_sensor_id,
-                    "used_entity_ids_in_rules": used_entity_ids_in_rules,
-                },
-            ).data
-        )
+        context = sensor_list_serializer_context(sensors=list(sensors), prefer_home_assistant_live_state=True)
+        return Response(SensorSerializer(sensors, many=True, context=context).data)
 
     def post(self, request):
         serializer = SensorCreateSerializer(data=request.data)
@@ -271,92 +193,16 @@ class SensorsView(APIView):
 class SensorDetailView(APIView):
     def get(self, request, sensor_id: int):
         sensor = Sensor.objects.get(pk=sensor_id)
-        entity_state_by_entity_id: dict[str, str | None] = {}
-        if sensor.entity_id:
-            last_state = (
-                Entity.objects.filter(entity_id=sensor.entity_id)
-                .values_list("last_state", flat=True)
-                .first()
-            )
-            entity_state_by_entity_id[sensor.entity_id] = last_state
-
-        status_obj = home_assistant.get_status()
-        if status_obj.configured and status_obj.reachable and sensor.entity_id:
-            try:
-                for item in home_assistant.list_entities():
-                    entity_id = item.get("entity_id")
-                    if entity_id != sensor.entity_id:
-                        continue
-                    state = item.get("state")
-                    entity_state_by_entity_id[sensor.entity_id] = state if isinstance(state, str) else None
-                    break
-            except Exception:
-                pass
-
-        last_triggered_by_sensor_id = dict(
-            AlarmEvent.objects.filter(
-                event_type=AlarmEventType.SENSOR_TRIGGERED,
-                sensor=sensor,
-            )
-            .values("sensor_id")
-            .annotate(last_ts=Max("timestamp"))
-            .values_list("sensor_id", "last_ts")
-        )
-
-        used_entity_ids_in_rules = set(
-            RuleEntityRef.objects.filter(rule__enabled=True).values_list("entity__entity_id", flat=True)
-        )
-
-        return Response(
-            SensorSerializer(
-                sensor,
-                context={
-                    "entity_state_by_entity_id": entity_state_by_entity_id,
-                    "last_triggered_by_sensor_id": last_triggered_by_sensor_id,
-                    "used_entity_ids_in_rules": used_entity_ids_in_rules,
-                },
-            ).data
-        )
+        context = sensor_detail_serializer_context(sensor=sensor, prefer_home_assistant_live_state=True)
+        return Response(SensorSerializer(sensor, context=context).data)
 
     def patch(self, request, sensor_id: int):
         sensor = Sensor.objects.get(pk=sensor_id)
         serializer = SensorUpdateSerializer(sensor, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         sensor = serializer.save()
-        entity_state_by_entity_id: dict[str, str | None] = {}
-        if sensor.entity_id:
-            last_state = (
-                Entity.objects.filter(entity_id=sensor.entity_id)
-                .values_list("last_state", flat=True)
-                .first()
-            )
-            entity_state_by_entity_id[sensor.entity_id] = last_state
-
-        last_triggered_by_sensor_id = dict(
-            AlarmEvent.objects.filter(
-                event_type=AlarmEventType.SENSOR_TRIGGERED,
-                sensor=sensor,
-            )
-            .values("sensor_id")
-            .annotate(last_ts=Max("timestamp"))
-            .values_list("sensor_id", "last_ts")
-        )
-
-        used_entity_ids_in_rules = set(
-            RuleEntityRef.objects.filter(rule__enabled=True).values_list("entity__entity_id", flat=True)
-        )
-
-        return Response(
-            SensorSerializer(
-                sensor,
-                context={
-                    "entity_state_by_entity_id": entity_state_by_entity_id,
-                    "last_triggered_by_sensor_id": last_triggered_by_sensor_id,
-                    "used_entity_ids_in_rules": used_entity_ids_in_rules,
-                },
-            ).data,
-            status=status.HTTP_200_OK,
-        )
+        context = sensor_detail_serializer_context(sensor=sensor, prefer_home_assistant_live_state=False)
+        return Response(SensorSerializer(sensor, context=context).data, status=status.HTTP_200_OK)
 
     def delete(self, request, sensor_id: int):
         sensor = Sensor.objects.get(pk=sensor_id)
@@ -394,78 +240,30 @@ class ArmAlarmView(APIView):
     def post(self, request):
         target_state = request.data.get("target_state")
         raw_code = request.data.get("code")
-        if target_state not in {
-            AlarmState.ARMED_HOME,
-            AlarmState.ARMED_AWAY,
-            AlarmState.ARMED_NIGHT,
-            AlarmState.ARMED_VACATION,
-        }:
-            return Response(
-                {"detail": "Invalid target_state."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        profile = services.get_active_settings_profile()
-        code_obj = None
-        if profile.code_arm_required or raw_code is not None:
-            if not raw_code:
-                services.record_failed_code(
-                    user=request.user,
-                    action="arm",
-                    metadata={"target_state": target_state, "reason": "missing"},
-                )
-                return Response(
-                    {"detail": "Code is required to arm."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            try:
-                code_obj = services.validate_user_code(user=request.user, raw_code=raw_code)
-            except services.InvalidCodeError as exc:
-                services.record_failed_code(
-                    user=request.user,
-                    action="arm",
-                    metadata={"target_state": target_state},
-                )
-                return Response(
-                    {"detail": str(exc) or "Invalid code."},
-                    status=status.HTTP_401_UNAUTHORIZED,
-                )
-
-        snapshot = services.arm(target_state=target_state, user=request.user, code=code_obj)
-        if code_obj is not None:
-            services.record_code_used(
+        try:
+            snapshot = alarm_actions.arm_alarm(
                 user=request.user,
-                code=code_obj,
-                action="arm",
-                metadata={"target_state": target_state},
+                target_state=target_state,
+                raw_code=raw_code,
             )
+        except alarm_actions.InvalidTargetState as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except alarm_actions.CodeRequired as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except alarm_actions.InvalidCode as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(AlarmStateSnapshotSerializer(snapshot).data)
 
 
 class DisarmAlarmView(APIView):
     def post(self, request):
         raw_code = request.data.get("code")
-        if not raw_code:
-            services.record_failed_code(
-                user=request.user,
-                action="disarm",
-                metadata={"reason": "missing"},
-            )
-            return Response(
-                {"detail": "Code is required to disarm."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         try:
-            code_obj = services.validate_user_code(user=request.user, raw_code=raw_code)
-        except services.InvalidCodeError as exc:
-            services.record_failed_code(user=request.user, action="disarm")
-            return Response(
-                {"detail": str(exc) or "Invalid code."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
-        snapshot = services.disarm(user=request.user, code=code_obj)
-        services.record_code_used(user=request.user, code=code_obj, action="disarm")
+            snapshot = alarm_actions.disarm_alarm(user=request.user, raw_code=raw_code)
+        except alarm_actions.CodeRequired as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except alarm_actions.InvalidCode as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(AlarmStateSnapshotSerializer(snapshot).data)
 
 

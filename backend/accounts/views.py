@@ -3,18 +3,16 @@ from __future__ import annotations
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
-from django.db import transaction
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 
-from alarm import services as alarm_services
-from alarm.models import AlarmSettingsProfile, AlarmState, AlarmStateSnapshot, AlarmSystem, Sensor
+from alarm.models import AlarmSettingsProfile, AlarmStateSnapshot, Sensor
 
-from .models import Role, User, UserCode, UserRoleAssignment
+from .models import User, UserCode
+from .policies import is_admin
 from .serializers import (
     LoginSerializer,
     OnboardingSerializer,
@@ -23,55 +21,8 @@ from .serializers import (
     UserCodeUpdateSerializer,
     UserSerializer,
 )
-
-
-def _is_admin(user: User) -> bool:
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser or user.is_staff:
-        return True
-    return user.role_assignments.filter(role__slug="admin").exists()
-
-
-def _ensure_active_settings_profile() -> AlarmSettingsProfile:
-    profile = AlarmSettingsProfile.objects.filter(is_active=True).first()
-    if profile:
-        return profile
-    existing = AlarmSettingsProfile.objects.first()
-    if existing:
-        existing.is_active = True
-        existing.save(update_fields=["is_active"])
-        return existing
-    return AlarmSettingsProfile.objects.create(
-        name="Default",
-        is_active=True,
-        delay_time=60,
-        arming_time=60,
-        trigger_time=120,
-        disarm_after_trigger=False,
-        code_arm_required=True,
-        available_arming_states=[
-            AlarmState.ARMED_AWAY,
-            AlarmState.ARMED_HOME,
-            AlarmState.ARMED_NIGHT,
-            AlarmState.ARMED_VACATION,
-        ],
-        state_overrides={},
-        audio_visual_settings={
-            "beep_enabled": True,
-            "countdown_display_enabled": True,
-            "color_coding_enabled": True,
-        },
-        sensor_behavior={
-            "warn_on_open_sensors": True,
-            "auto_bypass_enabled": False,
-            "force_arm_enabled": True,
-        },
-    )
-
-
-def _onboarding_required() -> bool:
-    return not User.objects.exists() and not AlarmSystem.objects.exists()
+from .use_cases import onboarding as onboarding_uc
+from .use_cases import codes as codes_uc
 
 
 class OnboardingView(APIView):
@@ -79,7 +30,7 @@ class OnboardingView(APIView):
 
     def get(self, request):
         return Response(
-            {"onboarding_required": _onboarding_required()},
+            {"onboarding_required": onboarding_uc.onboarding_required()},
             status=status.HTTP_200_OK,
         )
 
@@ -90,52 +41,16 @@ class OnboardingView(APIView):
         password = serializer.validated_data["password"]
         home_name = serializer.validated_data["home_name"]
 
-        if not _onboarding_required():
-            return Response(
-                {"detail": "Onboarding is already completed."},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        with transaction.atomic():
-            if not _onboarding_required():
-                return Response(
-                    {"detail": "Onboarding is already completed."},
-                    status=status.HTTP_409_CONFLICT,
-                )
-            user = User.objects.create_superuser(
+        try:
+            result = onboarding_uc.complete_onboarding(
                 email=email,
                 password=password,
-                timezone=settings.TIME_ZONE,
-                onboarding_completed_at=timezone.now(),
+                home_name=home_name,
+                timezone_name=settings.TIME_ZONE,
             )
-            role, _ = Role.objects.get_or_create(
-                slug="admin",
-                defaults={
-                    "name": "Admin",
-                    "description": "Full administrative access",
-                },
-            )
-            UserRoleAssignment.objects.get_or_create(
-                user=user,
-                role=role,
-                defaults={"assigned_by": user},
-            )
-            alarm_system = AlarmSystem.objects.create(
-                name=home_name,
-                timezone=settings.TIME_ZONE,
-            )
-            _ensure_active_settings_profile()
-            alarm_services.get_current_snapshot(process_timers=False)
-
-        return Response(
-            {
-                "user_id": str(user.id),
-                "email": user.email,
-                "home_name": alarm_system.name,
-                "timezone": alarm_system.timezone,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        except onboarding_uc.OnboardingAlreadyCompleted as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        return Response(result.as_dict(), status=status.HTTP_201_CREATED)
 
 
 class LoginView(APIView):
@@ -203,7 +118,7 @@ class CurrentUserView(APIView):
 
 class UsersView(APIView):
     def get(self, request):
-        if not _is_admin(request.user):
+        if not is_admin(request.user):
             return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
         users = User.objects.order_by("email")
         return Response(UserSerializer(users, many=True).data, status=status.HTTP_200_OK)
@@ -237,35 +152,35 @@ class SetupStatusView(APIView):
 
 class CodesView(APIView):
     def get(self, request):
-        target_user = request.user
         user_id = request.query_params.get("user_id")
-        if user_id and _is_admin(request.user):
-            target_user = User.objects.filter(id=user_id).first()
-            if not target_user:
-                return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            target_user = codes_uc.resolve_list_target_user(actor_user=request.user, requested_user_id=user_id)
+        except codes_uc.NotFound as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
 
-        codes = (
-            UserCode.objects.select_related("user")
-            .prefetch_related("allowed_states")
-            .filter(user=target_user)
-            .order_by("-created_at")
-        )
+        codes = codes_uc.list_codes_for_user(user=target_user)
         return Response(UserCodeSerializer(codes, many=True).data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        if not _is_admin(request.user):
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
-
         reauth_password = request.data.get("reauth_password")
-        if not reauth_password:
-            return Response({"detail": "Re-authentication required."}, status=status.HTTP_400_BAD_REQUEST)
-        if not request.user.check_password(reauth_password):
-            return Response({"detail": "Re-authentication failed."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            codes_uc.assert_admin(user=request.user)
+        except codes_uc.Forbidden as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            codes_uc.assert_admin_reauth(user=request.user, reauth_password=reauth_password)
+        except codes_uc.ReauthRequired as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except codes_uc.ReauthFailed as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
 
-        user_id = request.data.get("user_id") or str(request.user.id)
-        target_user = User.objects.filter(id=user_id).first()
-        if not target_user:
-            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            target_user = codes_uc.resolve_create_target_user(
+                actor_user=request.user,
+                requested_user_id=request.data.get("user_id"),
+            )
+        except codes_uc.NotFound as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = UserCodeCreateSerializer(
             data=request.data,
@@ -283,35 +198,31 @@ class CodesView(APIView):
 
 class CodeDetailView(APIView):
     def get(self, request, code_id: int):
-        code = (
-            UserCode.objects.select_related("user")
-            .prefetch_related("allowed_states")
-            .filter(id=code_id)
-            .first()
-        )
-        if not code:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if not _is_admin(request.user) and code.user_id != request.user.id:
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            code = codes_uc.get_code_for_read(actor_user=request.user, code_id=code_id)
+        except codes_uc.NotFound as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except codes_uc.Forbidden as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         return Response(UserCodeSerializer(code).data, status=status.HTTP_200_OK)
 
     def patch(self, request, code_id: int):
-        code = (
-            UserCode.objects.select_related("user")
-            .prefetch_related("allowed_states")
-            .filter(id=code_id)
-            .first()
-        )
-        if not code:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if not _is_admin(request.user):
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
-
         reauth_password = request.data.get("reauth_password")
-        if not reauth_password:
-            return Response({"detail": "Re-authentication required."}, status=status.HTTP_400_BAD_REQUEST)
-        if not request.user.check_password(reauth_password):
-            return Response({"detail": "Re-authentication failed."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            codes_uc.assert_admin(user=request.user)
+        except codes_uc.Forbidden as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            codes_uc.assert_admin_reauth(user=request.user, reauth_password=reauth_password)
+        except codes_uc.ReauthRequired as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except codes_uc.ReauthFailed as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            code = codes_uc.get_code_for_admin_update(actor_user=request.user, code_id=code_id)
+        except codes_uc.NotFound as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = UserCodeUpdateSerializer(instance=code, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)

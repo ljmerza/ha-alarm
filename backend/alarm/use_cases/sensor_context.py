@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+from django.db.models import Max
+
+from alarm import home_assistant
+from alarm.models import AlarmEvent, AlarmEventType, Entity, RuleEntityRef, Sensor
+
+
+def _entity_states_from_db(entity_ids: set[str]) -> dict[str, str | None]:
+    if not entity_ids:
+        return {}
+    return dict(Entity.objects.filter(entity_id__in=entity_ids).values_list("entity_id", "last_state"))
+
+
+def _overlay_entity_states_from_home_assistant(
+    *,
+    entity_state_by_entity_id: dict[str, str | None],
+    entity_ids: set[str],
+) -> None:
+    if not entity_ids:
+        return
+
+    status_obj = home_assistant.get_status()
+    if not status_obj.configured or not status_obj.reachable:
+        return
+
+    try:
+        for item in home_assistant.list_entities():
+            if not isinstance(item, dict):
+                continue
+            entity_id = item.get("entity_id")
+            if not isinstance(entity_id, str) or entity_id not in entity_ids:
+                continue
+            state = item.get("state")
+            entity_state_by_entity_id[entity_id] = state if isinstance(state, str) else None
+    except Exception:
+        # Fall back to DB-backed states when HA can't be queried live.
+        return
+
+
+def _used_entity_ids_in_enabled_rules() -> set[str]:
+    return set(RuleEntityRef.objects.filter(rule__enabled=True).values_list("entity__entity_id", flat=True))
+
+
+def _last_triggered_by_sensor_id(*, sensors: list[Sensor]) -> dict[int, object]:
+    if not sensors:
+        return {}
+    return dict(
+        AlarmEvent.objects.filter(
+            event_type=AlarmEventType.SENSOR_TRIGGERED,
+            sensor__in=sensors,
+        )
+        .values("sensor_id")
+        .annotate(last_ts=Max("timestamp"))
+        .values_list("sensor_id", "last_ts")
+    )
+
+
+def sensor_list_serializer_context(*, sensors: list[Sensor], prefer_home_assistant_live_state: bool = True) -> dict:
+    entity_ids = {(s.entity_id or "").strip() for s in sensors if (s.entity_id or "").strip()}
+    entity_state_by_entity_id = _entity_states_from_db(entity_ids)
+    if prefer_home_assistant_live_state:
+        _overlay_entity_states_from_home_assistant(
+            entity_state_by_entity_id=entity_state_by_entity_id,
+            entity_ids=entity_ids,
+        )
+
+    return {
+        "entity_state_by_entity_id": entity_state_by_entity_id,
+        "last_triggered_by_sensor_id": _last_triggered_by_sensor_id(sensors=sensors),
+        "used_entity_ids_in_rules": _used_entity_ids_in_enabled_rules(),
+    }
+
+
+def sensor_detail_serializer_context(*, sensor: Sensor, prefer_home_assistant_live_state: bool = True) -> dict:
+    entity_ids = {(sensor.entity_id or "").strip()} if (sensor.entity_id or "").strip() else set()
+    entity_state_by_entity_id = _entity_states_from_db(entity_ids)
+    if prefer_home_assistant_live_state:
+        _overlay_entity_states_from_home_assistant(
+            entity_state_by_entity_id=entity_state_by_entity_id,
+            entity_ids=entity_ids,
+        )
+
+    return {
+        "entity_state_by_entity_id": entity_state_by_entity_id,
+        "last_triggered_by_sensor_id": _last_triggered_by_sensor_id(sensors=[sensor]),
+        "used_entity_ids_in_rules": _used_entity_ids_in_enabled_rules(),
+    }
+

@@ -7,6 +7,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import User
+from alarm.models import Entity
 
 
 class HomeAssistantStatusApiTests(APITestCase):
@@ -74,3 +75,32 @@ class HomeAssistantStatusApiTests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["detail"], "Failed to fetch Home Assistant entities.")
+
+    @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
+    @patch("alarm.home_assistant._get_client")
+    def test_entity_sync_imports_entities(self, mock_get_client):
+        class _State:
+            entity_id = "binary_sensor.front_door"
+            state = "off"
+            attributes = {"friendly_name": "Front Door", "device_class": "door"}
+            last_changed = "2025-01-01T00:00:00Z"
+
+        class _Client:
+            def get_config(self):
+                return {"version": "1.0"}
+
+            def get_states(self):
+                return [_State()]
+
+        mock_get_client.return_value = _Client()
+
+        url = reverse("alarm-entities-sync")
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["imported"], 1)
+        self.assertEqual(response.data["updated"], 0)
+
+        entity = Entity.objects.get(entity_id="binary_sensor.front_door")
+        self.assertEqual(entity.domain, "binary_sensor")
+        self.assertEqual(entity.name, "Front Door")
+        self.assertEqual(entity.last_state, "off")

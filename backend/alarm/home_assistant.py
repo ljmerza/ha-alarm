@@ -12,6 +12,20 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+class HomeAssistantAvailabilityError(RuntimeError):
+    pass
+
+
+class HomeAssistantNotConfigured(HomeAssistantAvailabilityError):
+    pass
+
+
+class HomeAssistantNotReachable(HomeAssistantAvailabilityError):
+    def __init__(self, error: str | None = None):
+        self.error = error
+        super().__init__(error or "Home Assistant is not reachable.")
+
+
 def _import_client():
     try:
         from homeassistant_api import Client as HomeAssistantClient  # type: ignore
@@ -151,6 +165,15 @@ def get_status(*, timeout_seconds: float = 2.0) -> HomeAssistantStatus:
             base_url=base_url,
             error=str(exc) if client_error is None else f"{exc}; client_error={client_error}",
         )
+
+
+def ensure_available(*, timeout_seconds: float = 2.0) -> HomeAssistantStatus:
+    status_obj = get_status(timeout_seconds=timeout_seconds)
+    if not status_obj.configured:
+        raise HomeAssistantNotConfigured("Home Assistant is not configured.")
+    if not status_obj.reachable:
+        raise HomeAssistantNotReachable(status_obj.error)
+    return status_obj
 
 
 def list_entities(*, timeout_seconds: float = 5.0) -> list[dict[str, Any]]:

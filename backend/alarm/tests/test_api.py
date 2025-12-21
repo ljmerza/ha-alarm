@@ -11,7 +11,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import User
 from accounts.models import UserCode
-from alarm.models import AlarmSettingsProfile, AlarmState, Entity, Rule, Sensor
+from alarm.models import AlarmEvent, AlarmEventType, AlarmSettingsProfile, AlarmState, Entity, Rule, Sensor
 
 
 class AlarmApiTests(APITestCase):
@@ -52,6 +52,9 @@ class AlarmApiTests(APITestCase):
         url = reverse("alarm-arm")
         response = self.client.post(url, data={"target_state": AlarmState.ARMED_AWAY})
         self.assertEqual(response.status_code, 400)
+        self.assertTrue(
+            AlarmEvent.objects.filter(event_type=AlarmEventType.FAILED_CODE, metadata__action="arm").exists()
+        )
 
     def test_arm_rejects_invalid_code(self):
         url = reverse("alarm-arm")
@@ -60,6 +63,9 @@ class AlarmApiTests(APITestCase):
             data={"target_state": AlarmState.ARMED_AWAY, "code": "9999"},
         )
         self.assertEqual(response.status_code, 401)
+        self.assertTrue(
+            AlarmEvent.objects.filter(event_type=AlarmEventType.FAILED_CODE, metadata__action="arm").exists()
+        )
 
     def test_arm_to_arming(self):
         url = reverse("alarm-arm")
@@ -69,16 +75,25 @@ class AlarmApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["current_state"], AlarmState.ARMING)
+        self.assertTrue(
+            AlarmEvent.objects.filter(event_type=AlarmEventType.CODE_USED, metadata__action="arm").exists()
+        )
 
     def test_disarm_requires_code(self):
         url = reverse("alarm-disarm")
         response = self.client.post(url, data={})
         self.assertEqual(response.status_code, 400)
+        self.assertTrue(
+            AlarmEvent.objects.filter(event_type=AlarmEventType.FAILED_CODE, metadata__action="disarm").exists()
+        )
 
     def test_disarm_rejects_invalid_code(self):
         url = reverse("alarm-disarm")
         response = self.client.post(url, data={"code": "9999"})
         self.assertEqual(response.status_code, 401)
+        self.assertTrue(
+            AlarmEvent.objects.filter(event_type=AlarmEventType.FAILED_CODE, metadata__action="disarm").exists()
+        )
 
     def test_temporary_code_not_active_yet_is_rejected(self):
         url = reverse("alarm-disarm")

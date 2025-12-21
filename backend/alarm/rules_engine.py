@@ -7,9 +7,11 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from . import home_assistant
-from . import services
-from .models import Entity, Rule, RuleActionLog, RuleRuntimeState
+from .models import Entity, Rule, RuleRuntimeState
+from .rules.action_executor import execute_actions
+from .rules.audit_log import log_rule_action
+from .rules.conditions import eval_condition, eval_condition_explain, extract_for
+from .rules.runtime_state import cooldown_active, ensure_runtime
 
 
 class RuleEngineError(RuntimeError):
@@ -34,242 +36,6 @@ class RuleRunResult:
         }
 
 
-def _is_mapping(value: Any) -> bool:
-    return isinstance(value, dict)
-
-
-def _get_op(node: Any) -> str | None:
-    if not _is_mapping(node):
-        return None
-    op = node.get("op")
-    return op if isinstance(op, str) else None
-
-
-def _extract_for(node: Any) -> tuple[int | None, Any]:
-    if _get_op(node) != "for":
-        return None, node
-    if not _is_mapping(node):
-        return None, node
-    seconds = node.get("seconds")
-    child = node.get("child")
-    if not isinstance(seconds, int) or seconds <= 0:
-        return None, child
-    return seconds, child
-
-
-def _eval_condition(node: Any, *, entity_state: dict[str, str | None]) -> bool:
-    op = _get_op(node)
-    if not op:
-        return False
-
-    if op == "all":
-        if not _is_mapping(node):
-            return False
-        children = node.get("children")
-        if not isinstance(children, list) or not children:
-            return False
-        return all(_eval_condition(child, entity_state=entity_state) for child in children)
-
-    if op == "any":
-        if not _is_mapping(node):
-            return False
-        children = node.get("children")
-        if not isinstance(children, list) or not children:
-            return False
-        return any(_eval_condition(child, entity_state=entity_state) for child in children)
-
-    if op == "not":
-        if not _is_mapping(node):
-            return False
-        return not _eval_condition(node.get("child"), entity_state=entity_state)
-
-    if op == "entity_state":
-        if not _is_mapping(node):
-            return False
-        entity_id = node.get("entity_id")
-        equals = node.get("equals")
-        if not isinstance(entity_id, str) or not isinstance(equals, str):
-            return False
-        current = entity_state.get(entity_id)
-        return current == equals
-
-    return False
-
-
-def _eval_condition_explain(
-    node: Any, *, entity_state: dict[str, str | None]
-) -> tuple[bool, dict[str, Any]]:
-    op = _get_op(node)
-    if not op:
-        return False, {"op": None, "ok": False, "reason": "missing_op"}
-
-    if op in {"all", "any"}:
-        if not _is_mapping(node):
-            return False, {"op": op, "ok": False, "reason": "invalid_node"}
-        children = node.get("children")
-        if not isinstance(children, list) or not children:
-            return False, {"op": op, "ok": False, "reason": "missing_children"}
-        explained: list[dict[str, Any]] = []
-        if op == "all":
-            ok_all = True
-            for child in children:
-                ok_child, trace = _eval_condition_explain(child, entity_state=entity_state)
-                explained.append(trace)
-                if not ok_child:
-                    ok_all = False
-            return ok_all, {"op": "all", "ok": ok_all, "children": explained}
-        ok_any = False
-        for child in children:
-            ok_child, trace = _eval_condition_explain(child, entity_state=entity_state)
-            explained.append(trace)
-            if ok_child:
-                ok_any = True
-        return ok_any, {"op": "any", "ok": ok_any, "children": explained}
-
-    if op == "not":
-        if not _is_mapping(node):
-            return False, {"op": "not", "ok": False, "reason": "invalid_node"}
-        ok_child, trace = _eval_condition_explain(node.get("child"), entity_state=entity_state)
-        return (not ok_child), {"op": "not", "ok": (not ok_child), "child": trace}
-
-    if op == "entity_state":
-        if not _is_mapping(node):
-            return False, {"op": "entity_state", "ok": False, "reason": "invalid_node"}
-        entity_id = node.get("entity_id")
-        equals = node.get("equals")
-        if not isinstance(entity_id, str) or not isinstance(equals, str):
-            return False, {"op": "entity_state", "ok": False, "reason": "missing_fields"}
-        current = entity_state.get(entity_id)
-        ok = current == equals
-        return ok, {
-            "op": "entity_state",
-            "ok": ok,
-            "entity_id": entity_id,
-            "expected": equals,
-            "actual": current,
-        }
-
-    return False, {"op": op, "ok": False, "reason": "unsupported_op"}
-
-
-def _cooldown_active(*, rule: Rule, runtime: RuleRuntimeState | None, now) -> bool:
-    cooldown_seconds = rule.cooldown_seconds
-    if not cooldown_seconds:
-        return False
-    last_fired_at = runtime.last_fired_at if runtime else None
-    if not last_fired_at:
-        return False
-    return (now - last_fired_at).total_seconds() < cooldown_seconds
-
-
-def _ensure_runtime(rule: Rule) -> RuleRuntimeState:
-    runtime, _ = RuleRuntimeState.objects.get_or_create(
-        rule=rule,
-        node_id="when",
-        defaults={"status": "pending"},
-    )
-    return runtime
-
-
-def _log_action(
-    *,
-    rule: Rule,
-    fired_at,
-    kind: str,
-    actions: list[dict[str, Any]],
-    result: dict[str, Any],
-    trace: dict[str, Any],
-    error: str = "",
-) -> None:
-    RuleActionLog.objects.create(
-        rule=rule,
-        entity=None,
-        fired_at=fired_at,
-        kind=kind,
-        actions=actions,
-        result=result,
-        trace=trace,
-        alarm_state_before=result.get("alarm_state_before", "") if isinstance(result, dict) else "",
-        alarm_state_after=result.get("alarm_state_after", "") if isinstance(result, dict) else "",
-        error=error,
-    )
-
-
-def _execute_actions(*, rule: Rule, actions: list[dict[str, Any]], now, actor_user=None) -> dict[str, Any]:
-    snapshot_before = services.get_current_snapshot(process_timers=True)
-    alarm_state_before = snapshot_before.current_state
-    action_results: list[dict[str, Any]] = []
-    error_messages: list[str] = []
-
-    for action in actions:
-        if not isinstance(action, dict):
-            action_results.append({"ok": False, "error": "invalid_action"})
-            continue
-        action_type = action.get("type")
-        if action_type == "alarm_disarm":
-            try:
-                services.disarm(user=actor_user, reason=f"rule:{rule.id}")
-                action_results.append({"ok": True, "type": "alarm_disarm"})
-            except Exception as exc:  # pragma: no cover - defensive
-                action_results.append({"ok": False, "type": "alarm_disarm", "error": str(exc)})
-                error_messages.append(str(exc))
-            continue
-
-        if action_type == "alarm_arm":
-            mode = action.get("mode")
-            if not isinstance(mode, str):
-                action_results.append({"ok": False, "type": "alarm_arm", "error": "missing_mode"})
-                continue
-            try:
-                services.arm(target_state=mode, user=actor_user, reason=f"rule:{rule.id}")
-                action_results.append({"ok": True, "type": "alarm_arm", "mode": mode})
-            except Exception as exc:
-                action_results.append({"ok": False, "type": "alarm_arm", "mode": mode, "error": str(exc)})
-                error_messages.append(str(exc))
-            continue
-
-        if action_type == "alarm_trigger":
-            try:
-                services.trigger(user=actor_user, reason=f"rule:{rule.id}")
-                action_results.append({"ok": True, "type": "alarm_trigger"})
-            except Exception as exc:
-                action_results.append({"ok": False, "type": "alarm_trigger", "error": str(exc)})
-                error_messages.append(str(exc))
-            continue
-
-        if action_type == "ha_call_service":
-            domain = action.get("domain")
-            service_name = action.get("service")
-            target = action.get("target")
-            service_data = action.get("service_data")
-            if not isinstance(domain, str) or not isinstance(service_name, str):
-                action_results.append({"ok": False, "type": "ha_call_service", "error": "missing_domain_or_service"})
-                continue
-            try:
-                home_assistant.call_service(
-                    domain=domain,
-                    service=service_name,
-                    target=target if isinstance(target, dict) else None,
-                    service_data=service_data if isinstance(service_data, dict) else None,
-                )
-                action_results.append({"ok": True, "type": "ha_call_service", "domain": domain, "service": service_name})
-            except Exception as exc:
-                action_results.append({"ok": False, "type": "ha_call_service", "domain": domain, "service": service_name, "error": str(exc)})
-                error_messages.append(str(exc))
-            continue
-
-        action_results.append({"ok": False, "type": str(action_type), "error": "unsupported_action"})
-
-    snapshot_after = services.get_current_snapshot(process_timers=True)
-    return {
-        "alarm_state_before": alarm_state_before,
-        "alarm_state_after": snapshot_after.current_state,
-        "actions": action_results,
-        "errors": error_messages,
-        "timestamp": now.isoformat(),
-    }
-
-
 @transaction.atomic
 def run_rules(*, now=None, actor_user=None) -> RuleRunResult:
     now = now or timezone.now()
@@ -291,21 +57,21 @@ def run_rules(*, now=None, actor_user=None) -> RuleRunResult:
 
     for runtime in due_runtimes:
         rule = runtime.rule
-        seconds, child = _extract_for((rule.definition or {}).get("when") if isinstance(rule.definition, dict) else None)
+        seconds, child = extract_for((rule.definition or {}).get("when") if isinstance(rule.definition, dict) else None)
         if not seconds:
             runtime.scheduled_for = None
             runtime.became_true_at = None
             runtime.save(update_fields=["scheduled_for", "became_true_at", "updated_at"])
             continue
 
-        matched = _eval_condition(child, entity_state=entity_state)
+        matched = eval_condition(child, entity_state=entity_state)
         if not matched:
             runtime.scheduled_for = None
             runtime.became_true_at = None
             runtime.save(update_fields=["scheduled_for", "became_true_at", "updated_at"])
             continue
 
-        if _cooldown_active(rule=rule, runtime=runtime, now=now):
+        if cooldown_active(rule=rule, runtime=runtime, now=now):
             skipped_cooldown += 1
             runtime.scheduled_for = None
             runtime.save(update_fields=["scheduled_for", "updated_at"])
@@ -314,15 +80,22 @@ def run_rules(*, now=None, actor_user=None) -> RuleRunResult:
         try:
             then = (rule.definition or {}).get("then") if isinstance(rule.definition, dict) else []
             actions = then if isinstance(then, list) else []
-            result = _execute_actions(rule=rule, actions=actions, now=now, actor_user=actor_user)
-            _log_action(rule=rule, fired_at=now, kind=rule.kind, actions=actions, result=result, trace={"source": "timer"})
+            result = execute_actions(rule=rule, actions=actions, now=now, actor_user=actor_user)
+            log_rule_action(
+                rule=rule,
+                fired_at=now,
+                kind=rule.kind,
+                actions=actions,
+                result=result,
+                trace={"source": "timer"},
+            )
             runtime.last_fired_at = now
             runtime.scheduled_for = None
             runtime.save(update_fields=["last_fired_at", "scheduled_for", "updated_at"])
             fired += 1
         except Exception as exc:  # pragma: no cover - defensive
             errors += 1
-            _log_action(
+            log_rule_action(
                 rule=rule,
                 fired_at=now,
                 kind=rule.kind,
@@ -335,11 +108,11 @@ def run_rules(*, now=None, actor_user=None) -> RuleRunResult:
     for rule in rules:
         definition = rule.definition or {}
         when_node = definition.get("when") if isinstance(definition, dict) else None
-        seconds, child = _extract_for(when_node)
+        seconds, child = extract_for(when_node)
 
         if seconds:
-            runtime = _ensure_runtime(rule)
-            matched = _eval_condition(child, entity_state=entity_state)
+            runtime = ensure_runtime(rule)
+            matched = eval_condition(child, entity_state=entity_state)
             if not matched:
                 if runtime.became_true_at or runtime.scheduled_for:
                     runtime.became_true_at = None
@@ -354,26 +127,33 @@ def run_rules(*, now=None, actor_user=None) -> RuleRunResult:
                 scheduled += 1
             continue
 
-        matched = _eval_condition(when_node, entity_state=entity_state)
+        matched = eval_condition(when_node, entity_state=entity_state)
         if not matched:
             continue
 
-        runtime = _ensure_runtime(rule)
-        if _cooldown_active(rule=rule, runtime=runtime, now=now):
+        runtime = ensure_runtime(rule)
+        if cooldown_active(rule=rule, runtime=runtime, now=now):
             skipped_cooldown += 1
             continue
 
         then = definition.get("then") if isinstance(definition, dict) else []
         actions = then if isinstance(then, list) else []
         try:
-            result = _execute_actions(rule=rule, actions=actions, now=now, actor_user=actor_user)
-            _log_action(rule=rule, fired_at=now, kind=rule.kind, actions=actions, result=result, trace={"source": "immediate"})
+            result = execute_actions(rule=rule, actions=actions, now=now, actor_user=actor_user)
+            log_rule_action(
+                rule=rule,
+                fired_at=now,
+                kind=rule.kind,
+                actions=actions,
+                result=result,
+                trace={"source": "immediate"},
+            )
             runtime.last_fired_at = now
             runtime.save(update_fields=["last_fired_at", "updated_at"])
             fired += 1
         except Exception as exc:  # pragma: no cover - defensive
             errors += 1
-            _log_action(
+            log_rule_action(
                 rule=rule,
                 fired_at=now,
                 kind=rule.kind,
@@ -417,10 +197,10 @@ def simulate_rules(
     for rule in rules:
         definition = rule.definition or {}
         when_node = definition.get("when") if isinstance(definition, dict) else None
-        seconds, child = _extract_for(when_node)
+        seconds, child = extract_for(when_node)
 
         if seconds:
-            ok_child, trace = _eval_condition_explain(child, entity_state=merged_state)
+            ok_child, trace = eval_condition_explain(child, entity_state=merged_state)
             if not ok_child:
                 not_matched.append(
                     {
@@ -463,7 +243,7 @@ def simulate_rules(
             )
             continue
 
-        ok, trace = _eval_condition_explain(when_node, entity_state=merged_state)
+        ok, trace = eval_condition_explain(when_node, entity_state=merged_state)
         payload = {
             "id": rule.id,
             "name": rule.name,
