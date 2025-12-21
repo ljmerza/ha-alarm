@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, Search, Shield, Loader2 } from 'lucide-react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { Routes } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/errors'
-import { homeAssistantService, sensorsService } from '@/services'
-import { useAuthStore } from '@/stores'
+import { sensorsService } from '@/services'
 import type { HomeAssistantEntity } from '@/services/homeAssistant'
 import { queryKeys } from '@/types'
+import { useHomeAssistantEntities, useHomeAssistantStatus, useSensorsQuery } from '@/hooks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -33,25 +33,9 @@ export function ImportSensorsPage() {
     'Suggested based on the Home Assistant device class (door/window/garage_door).'
 
   const queryClient = useQueryClient()
-  const { isAuthenticated } = useAuthStore()
-
-  const haStatusQuery = useQuery({
-    queryKey: queryKeys.homeAssistant.status,
-    queryFn: homeAssistantService.getStatus,
-    enabled: isAuthenticated,
-  })
-
-  const haEntitiesQuery = useQuery({
-    queryKey: queryKeys.homeAssistant.entities,
-    queryFn: homeAssistantService.listEntities,
-    enabled: !!isAuthenticated && !!haStatusQuery.data?.configured && !!haStatusQuery.data?.reachable,
-  })
-
-  const sensorsQuery = useQuery({
-    queryKey: queryKeys.sensors.all,
-    queryFn: sensorsService.getSensors,
-    enabled: isAuthenticated,
-  })
+  const haStatusQuery = useHomeAssistantStatus()
+  const haEntitiesQuery = useHomeAssistantEntities()
+  const sensorsQuery = useSensorsQuery()
   const sensors = useMemo(() => sensorsQuery.data ?? [], [sensorsQuery.data])
 
   const [query, setQuery] = useState('')

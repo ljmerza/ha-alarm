@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore, useUIStore } from '@/stores'
 import { alarmService } from '@/services'
-import type { WebSocketStatus } from '@/types'
 import { queryKeys } from '@/types'
+import { useWebSocketStatus } from '@/hooks'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { IconButton } from '@/components/ui/icon-button'
@@ -21,13 +21,7 @@ export function Header() {
   })
   const alarmState = alarmStateQuery.data ?? null
 
-  const wsStatusQuery = useQuery<WebSocketStatus>({
-    queryKey: queryKeys.websocket.status,
-    queryFn: async () => 'disconnected' as WebSocketStatus,
-    initialData: 'disconnected',
-    enabled: false,
-  })
-  const wsStatus = wsStatusQuery.data
+  const wsStatus = useWebSocketStatus().data
 
   const currentState = alarmState?.currentState ?? AlarmState.DISARMED
 

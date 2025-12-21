@@ -18,7 +18,7 @@ class RuleSimulateInputError(ValidationError):
 
 
 def list_rules(*, kind: str | None, enabled: str | None):
-    queryset = Rule.objects.all()
+    queryset = Rule.objects.all().prefetch_related("entity_refs__entity")
     if kind:
         queryset = queryset.filter(kind=kind)
     if enabled in {"true", "false"}:

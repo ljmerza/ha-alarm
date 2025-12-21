@@ -1,13 +1,11 @@
 import { useMemo } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { alarmService, homeAssistantService, sensorsService } from '@/services'
-import { useAuthStore } from '@/stores'
-import type { WebSocketStatus } from '@/types'
 import { queryKeys } from '@/types'
+import { useWebSocketStatus, useAlarmStateQuery, useSensorsQuery, useRecentEventsQuery, useHomeAssistantStatus } from '@/hooks'
 
 function formatTimestamp(value?: string | null): string {
   if (!value) return '—'
@@ -18,39 +16,16 @@ function formatTimestamp(value?: string | null): string {
 
 export function SystemStatusCard() {
   const queryClient = useQueryClient()
-  const { isAuthenticated } = useAuthStore()
-  const wsStatusQuery = useQuery<WebSocketStatus>({
-    queryKey: queryKeys.websocket.status,
-    queryFn: async () => 'disconnected' as WebSocketStatus,
-    initialData: 'disconnected',
-    enabled: false,
-  })
-  const wsStatus = wsStatusQuery.data
+  const wsStatus = useWebSocketStatus().data
 
-  const alarmStateQuery = useQuery({
-    queryKey: queryKeys.alarm.state,
-    queryFn: alarmService.getState,
-    enabled: isAuthenticated,
-  })
-  const sensorsQuery = useQuery({
-    queryKey: queryKeys.sensors.all,
-    queryFn: sensorsService.getSensors,
-    enabled: isAuthenticated,
-  })
-  const recentEventsQuery = useQuery({
-    queryKey: queryKeys.events.recent,
-    queryFn: () => alarmService.getRecentEvents(10),
-    enabled: isAuthenticated,
-  })
+  const alarmStateQuery = useAlarmStateQuery()
+  const sensorsQuery = useSensorsQuery()
+  const recentEventsQuery = useRecentEventsQuery(10)
 
   const alarmState = alarmStateQuery.data ?? null
   const isLoading = alarmStateQuery.isFetching || sensorsQuery.isFetching || recentEventsQuery.isFetching
 
-  const haQuery = useQuery({
-    queryKey: queryKeys.homeAssistant.status,
-    queryFn: homeAssistantService.getStatus,
-    enabled: isAuthenticated,
-  })
+  const haQuery = useHomeAssistantStatus()
 
   const ha =
     haQuery.data ??

@@ -27,18 +27,30 @@ class RulesView(APIView):
 
 class RuleDetailView(ObjectPermissionMixin, APIView):
     def get(self, request, rule_id: int):
-        rule = self.get_object_or_404(request, queryset=Rule.objects.all(), pk=rule_id)
+        rule = self.get_object_or_404(
+            request,
+            queryset=Rule.objects.all().prefetch_related("entity_refs__entity"),
+            pk=rule_id,
+        )
         return Response(RuleSerializer(rule).data, status=status.HTTP_200_OK)
 
     def patch(self, request, rule_id: int):
-        rule = self.get_object_or_404(request, queryset=Rule.objects.all(), pk=rule_id)
+        rule = self.get_object_or_404(
+            request,
+            queryset=Rule.objects.all().prefetch_related("entity_refs__entity"),
+            pk=rule_id,
+        )
         serializer = RuleUpsertSerializer(rule, data=request.data, partial=True, context={"request": request})
         serializer.is_valid(raise_exception=True)
         rule = serializer.save()
         return Response(RuleSerializer(rule).data, status=status.HTTP_200_OK)
 
     def delete(self, request, rule_id: int):
-        rule = self.get_object_or_404(request, queryset=Rule.objects.all(), pk=rule_id)
+        rule = self.get_object_or_404(
+            request,
+            queryset=Rule.objects.all().prefetch_related("entity_refs__entity"),
+            pk=rule_id,
+        )
         rule.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

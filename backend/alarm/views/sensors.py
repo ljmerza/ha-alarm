@@ -12,8 +12,8 @@ from config.view_utils import ObjectPermissionMixin
 
 class SensorsView(APIView):
     def get(self, request):
-        sensors = Sensor.objects.all()
-        context = sensor_list_serializer_context(sensors=list(sensors), prefer_home_assistant_live_state=True)
+        sensors = list(Sensor.objects.all())
+        context = sensor_list_serializer_context(sensors=sensors, prefer_home_assistant_live_state=True)
         return Response(SensorSerializer(sensors, many=True, context=context).data)
 
     def post(self, request):

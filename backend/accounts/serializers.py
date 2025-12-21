@@ -50,9 +50,17 @@ class UserSerializer(serializers.ModelSerializer):
         )
 
     def get_role(self, obj: User) -> str:
-        assignment = obj.role_assignments.select_related("role").first()
-        if assignment:
-            return assignment.role.slug
+        prefetched = getattr(obj, "_prefetched_objects_cache", {}) or {}
+        if "role_assignments" in prefetched:
+            assignments = list(obj.role_assignments.all())
+            if assignments:
+                role = getattr(assignments[0], "role", None)
+                if role is not None:
+                    return role.slug
+        else:
+            assignment = obj.role_assignments.select_related("role").first()
+            if assignment:
+                return assignment.role.slug
         if obj.is_superuser:
             return "admin"
         return "resident"
@@ -64,6 +72,13 @@ class UserSerializer(serializers.ModelSerializer):
         return full_name or obj.email
 
     def get_has2FA(self, obj: User) -> bool:
+        prefetched = getattr(obj, "_prefetched_objects_cache", {}) or {}
+        if "totp_devices" in prefetched:
+            return any(
+                bool(getattr(device, "is_active", False))
+                and getattr(device, "confirmed_at", None) is not None
+                for device in obj.totp_devices.all()
+            )
         return obj.totp_devices.filter(is_active=True, confirmed_at__isnull=False).exists()
 
 

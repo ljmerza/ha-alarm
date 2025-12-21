@@ -2,38 +2,19 @@ import { useCallback, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlarmState } from '@/lib/constants'
 import type { AlarmStateType } from '@/lib/constants'
-import { alarmService, sensorsService } from '@/services'
-import { useAuthStore } from '@/stores'
-import type { AlarmEvent, AlarmSettingsProfile, AlarmStateSnapshot, CountdownPayload, Sensor, WebSocketStatus } from '@/types'
+import { alarmService } from '@/services'
+import type { AlarmEvent, AlarmSettingsProfile, AlarmStateSnapshot, CountdownPayload, Sensor } from '@/types'
 import { queryKeys } from '@/types'
+import { useWebSocketStatus } from '@/hooks/useWebSocketStatus'
+import { useAlarmStateQuery, useAlarmSettingsQuery, useSensorsQuery, useRecentEventsQuery } from '@/hooks/useAlarmQueries'
 
 export function useAlarm() {
   const queryClient = useQueryClient()
-  const { isAuthenticated } = useAuthStore()
 
-  const alarmStateQuery = useQuery({
-    queryKey: queryKeys.alarm.state,
-    queryFn: alarmService.getState,
-    enabled: isAuthenticated,
-  })
-
-  const settingsQuery = useQuery({
-    queryKey: queryKeys.alarm.settings,
-    queryFn: alarmService.getSettings,
-    enabled: isAuthenticated,
-  })
-
-  const sensorsQuery = useQuery({
-    queryKey: queryKeys.sensors.all,
-    queryFn: sensorsService.getSensors,
-    enabled: isAuthenticated,
-  })
-
-  const recentEventsQuery = useQuery({
-    queryKey: queryKeys.events.recent,
-    queryFn: () => alarmService.getRecentEvents(10),
-    enabled: isAuthenticated,
-  })
+  const alarmStateQuery = useAlarmStateQuery()
+  const settingsQuery = useAlarmSettingsQuery()
+  const sensorsQuery = useSensorsQuery()
+  const recentEventsQuery = useRecentEventsQuery(10)
 
   const countdownQuery = useQuery<CountdownPayload | null>({
     queryKey: queryKeys.alarm.countdown,
@@ -41,13 +22,7 @@ export function useAlarm() {
     initialData: null,
     enabled: false,
   })
-
-  const wsStatusQuery = useQuery<WebSocketStatus>({
-    queryKey: queryKeys.websocket.status,
-    queryFn: async () => 'disconnected' as WebSocketStatus,
-    initialData: 'disconnected',
-    enabled: false,
-  })
+  const wsStatusQuery = useWebSocketStatus()
 
   const armMutation = useMutation({
     mutationFn: ({ targetState, code }: { targetState: AlarmStateType; code?: string }) =>
