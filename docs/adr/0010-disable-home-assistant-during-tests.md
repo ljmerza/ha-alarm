@@ -15,6 +15,7 @@ When running automated tests, inheriting these environment variables can cause t
 When running `manage.py test`, treat Home Assistant as “not configured” by default:
 - In `config.settings`, clear `HOME_ASSISTANT_URL` and `HOME_ASSISTANT_TOKEN` when `"test"` is present in `sys.argv`.
 - Allow opt-in integration testing by setting `ALLOW_HOME_ASSISTANT_IN_TESTS=true`.
+- Reduce noise by setting the `alarm.home_assistant` logger to `WARNING` during tests (unless HA integration is enabled).
 
 ## Alternatives Considered
 - Patch/mocking at every call site (fragile, easy to miss).
@@ -27,4 +28,3 @@ When running `manage.py test`, treat Home Assistant as “not configured” by d
 
 ## Todos
 - Consider a dedicated helper script for HA integration test runs (e.g., `./scripts/docker-test-ha.sh`) if needed.
-

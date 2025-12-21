@@ -70,8 +70,6 @@ class SensorCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("entity_id is required.")
         if "." not in entity_id:
             raise serializers.ValidationError("Invalid entity_id.")
-        if Sensor.objects.filter(entity_id=entity_id).exists():
-            raise serializers.ValidationError("This entity_id is already mapped.")
         return entity_id
 
 
@@ -84,4 +82,3 @@ class SensorUpdateSerializer(serializers.ModelSerializer):
             "is_active",
             "is_entry_point",
         )
-
