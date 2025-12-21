@@ -1,0 +1,70 @@
+import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '@/stores'
+import { wsManager } from '@/services'
+import type { AlarmEvent, AlarmStateSnapshot, CountdownPayload, AlarmWebSocketMessage } from '@/types'
+import { queryKeys } from '@/types'
+
+let unsubscribeMessages: (() => void) | null = null
+
+function upsertRecentEvent(prev: AlarmEvent[] | undefined, nextEvent: AlarmEvent): AlarmEvent[] {
+  const existing = Array.isArray(prev) ? prev : []
+  const without = existing.filter((e) => e.id !== nextEvent.id)
+  return [nextEvent, ...without].slice(0, 10)
+}
+
+export function AlarmRealtimeProvider() {
+  const queryClient = useQueryClient()
+  const { isAuthenticated } = useAuthStore()
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      wsManager.disconnect()
+      if (unsubscribeMessages) {
+        unsubscribeMessages()
+        unsubscribeMessages = null
+      }
+      queryClient.setQueryData(queryKeys.alarm.countdown, null)
+      return
+    }
+
+    if (!unsubscribeMessages) {
+      unsubscribeMessages = wsManager.onMessage((message: AlarmWebSocketMessage) => {
+        switch (message.type) {
+          case 'alarm_state':
+            queryClient.setQueryData(
+              queryKeys.alarm.state,
+              (message.payload as { state: AlarmStateSnapshot }).state
+            )
+            break
+          case 'event':
+            queryClient.setQueryData(queryKeys.events.recent, (prev) =>
+              upsertRecentEvent(prev as AlarmEvent[] | undefined, (message.payload as { event: AlarmEvent }).event)
+            )
+            break
+          case 'countdown':
+            queryClient.setQueryData(queryKeys.alarm.countdown, message.payload as CountdownPayload)
+            break
+          case 'health':
+            break
+        }
+      })
+    }
+
+    wsManager.connect()
+
+    return () => {
+      wsManager.disconnect()
+      if (unsubscribeMessages) {
+        unsubscribeMessages()
+        unsubscribeMessages = null
+      }
+      queryClient.setQueryData(queryKeys.alarm.countdown, null)
+    }
+  }, [isAuthenticated, queryClient])
+
+  return null
+}
+
+export default AlarmRealtimeProvider
+

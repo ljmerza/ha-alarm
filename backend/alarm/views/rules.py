@@ -49,10 +49,6 @@ class RuleRunView(APIView):
 
 class RuleSimulateView(APIView):
     def post(self, request):
-        try:
-            input_data = rules_uc.parse_simulate_input(request.data)
-        except rules_uc.RuleSimulateInputError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        input_data = rules_uc.parse_simulate_input(request.data)
         result = rules_uc.simulate_rules(input_data=input_data)
         return Response(result, status=status.HTTP_200_OK)
-

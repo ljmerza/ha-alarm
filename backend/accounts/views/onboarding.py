@@ -26,14 +26,10 @@ class OnboardingView(APIView):
         password = serializer.validated_data["password"]
         home_name = serializer.validated_data["home_name"]
 
-        try:
-            result = onboarding_uc.complete_onboarding(
-                email=email,
-                password=password,
-                home_name=home_name,
-                timezone_name=settings.TIME_ZONE,
-            )
-        except onboarding_uc.OnboardingAlreadyCompleted as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        result = onboarding_uc.complete_onboarding(
+            email=email,
+            password=password,
+            home_name=home_name,
+            timezone_name=settings.TIME_ZONE,
+        )
         return Response(result.as_dict(), status=status.HTTP_201_CREATED)
-

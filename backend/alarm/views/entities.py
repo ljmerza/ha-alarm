@@ -19,19 +19,9 @@ class EntitiesView(APIView):
 
 class EntitySyncView(APIView):
     def post(self, request):
+        default_home_assistant_gateway.ensure_available()
         try:
-            default_home_assistant_gateway.ensure_available()
             items = default_home_assistant_gateway.list_entities()
-        except home_assistant.HomeAssistantNotConfigured:
-            return Response(
-                {"detail": "Home Assistant is not configured."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except home_assistant.HomeAssistantNotReachable as exc:
-            return Response(
-                {"detail": "Home Assistant is not reachable.", "error": exc.error},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
         except Exception as exc:
             return Response(
                 {"detail": "Failed to fetch Home Assistant entities.", "error": str(exc)},
@@ -39,4 +29,3 @@ class EntitySyncView(APIView):
             )
         result = sync_entities_from_home_assistant(items=items)
         return Response(result, status=status.HTTP_200_OK)
-

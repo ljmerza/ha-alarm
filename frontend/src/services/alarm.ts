@@ -72,15 +72,14 @@ export const alarmService = {
     endDate?: string
     userId?: string
   }): Promise<PaginatedResponse<AlarmEvent>> {
-    return api.get<PaginatedResponse<AlarmEvent>>('/api/events/', params ? { ...params } : undefined)
+    return api.getPaginated<AlarmEvent>('/api/events/', params ? { ...params } : undefined)
   },
 
   async getRecentEvents(limit: number = 10): Promise<AlarmEvent[]> {
-    const response = await api.get<PaginatedResponse<AlarmEvent>>('/api/events/', {
+    return api.getPaginatedItems<AlarmEvent>('/api/events/', {
       pageSize: limit,
       ordering: '-timestamp',
     })
-    return response.data
   },
 
   async acknowledgeEvent(id: number): Promise<AlarmEvent> {

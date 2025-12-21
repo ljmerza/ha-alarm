@@ -56,6 +56,7 @@ export const queryKeys = {
     state: ['alarm', 'state'] as const,
     settings: ['alarm', 'settings'] as const,
     settingsProfiles: ['alarm', 'settings', 'profiles'] as const,
+    countdown: ['alarm', 'countdown'] as const,
   },
   sensors: {
     all: ['sensors'] as const,

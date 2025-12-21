@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react'
-import { useAlarmStore } from '@/stores'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { homeAssistantService } from '@/services'
+import { alarmService, homeAssistantService, sensorsService } from '@/services'
+import { useAuthStore } from '@/stores'
+import { useWebSocket } from '@/hooks'
+import { queryKeys } from '@/types'
 
 function formatTimestamp(value?: string | null): string {
   if (!value) return '—'
@@ -14,8 +17,28 @@ function formatTimestamp(value?: string | null): string {
 }
 
 export function SystemStatusCard() {
-  const { wsStatus, alarmState, isLoading, fetchAlarmState, fetchSensors, fetchRecentEvents } =
-    useAlarmStore()
+  const queryClient = useQueryClient()
+  const { isAuthenticated } = useAuthStore()
+  const ws = useWebSocket()
+
+  const alarmStateQuery = useQuery({
+    queryKey: queryKeys.alarm.state,
+    queryFn: alarmService.getState,
+    enabled: isAuthenticated,
+  })
+  const sensorsQuery = useQuery({
+    queryKey: queryKeys.sensors.all,
+    queryFn: sensorsService.getSensors,
+    enabled: isAuthenticated,
+  })
+  const recentEventsQuery = useQuery({
+    queryKey: queryKeys.events.recent,
+    queryFn: () => alarmService.getRecentEvents(10),
+    enabled: isAuthenticated,
+  })
+
+  const alarmState = alarmStateQuery.data ?? null
+  const isLoading = alarmStateQuery.isFetching || sensorsQuery.isFetching || recentEventsQuery.isFetching
   const [ha, setHa] = useState<{
     configured: boolean
     reachable: boolean
@@ -23,7 +46,7 @@ export function SystemStatusCard() {
   } | null>(null)
 
   const statusLabel = useMemo(() => {
-    switch (wsStatus) {
+    switch (ws.status) {
       case 'connected':
         return 'Connected'
       case 'connecting':
@@ -34,9 +57,9 @@ export function SystemStatusCard() {
       default:
         return 'Offline'
     }
-  }, [wsStatus])
+  }, [ws.status])
 
-  const StatusIcon = wsStatus === 'connected' ? Wifi : WifiOff
+  const StatusIcon = ws.status === 'connected' ? Wifi : WifiOff
 
   useEffect(() => {
     let isMounted = true
@@ -66,7 +89,7 @@ export function SystemStatusCard() {
             <StatusIcon
               className={cn(
                 'h-4 w-4',
-                wsStatus === 'connected' ? 'text-emerald-500' : 'text-muted-foreground'
+                ws.status === 'connected' ? 'text-emerald-500' : 'text-muted-foreground'
               )}
             />
             <span className="text-sm">{statusLabel}</span>
@@ -76,9 +99,9 @@ export function SystemStatusCard() {
             variant="outline"
             disabled={isLoading}
             onClick={() => {
-              fetchAlarmState()
-              fetchSensors()
-              fetchRecentEvents()
+              void queryClient.invalidateQueries({ queryKey: queryKeys.alarm.state })
+              void queryClient.invalidateQueries({ queryKey: queryKeys.sensors.all })
+              void queryClient.invalidateQueries({ queryKey: queryKeys.events.recent })
               homeAssistantService
                 .getStatus()
                 .then((status) => setHa(status))

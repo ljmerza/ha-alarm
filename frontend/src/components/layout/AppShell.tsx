@@ -1,9 +1,11 @@
 import { Outlet } from 'react-router-dom'
 import { Header } from './Header'
+import { AlarmRealtimeProvider } from '@/components/providers/AlarmRealtimeProvider'
 
 export function AppShell() {
   return (
     <div className="min-h-screen bg-background">
+      <AlarmRealtimeProvider />
       {/* Main Content */}
       <div className="flex flex-col">
         <Header />

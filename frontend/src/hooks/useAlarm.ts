@@ -1,43 +1,101 @@
-import { useEffect, useCallback } from 'react'
-import { useAlarmStore } from '@/stores'
+import { useCallback, useMemo } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import { AlarmState } from '@/lib/constants'
+import type { AlarmStateType } from '@/lib/constants'
+import { alarmService, sensorsService } from '@/services'
+import { useAuthStore } from '@/stores'
+import type { AlarmEvent, AlarmSettingsProfile, AlarmStateSnapshot, CountdownPayload, Sensor } from '@/types'
+import { queryKeys } from '@/types'
 
 export function useAlarm() {
-  const {
-    alarmState,
-    settings,
-    sensors,
-    recentEvents,
-    wsStatus,
-    countdown,
-    isLoading,
-    error,
-    fetchAlarmState,
-    fetchSettings,
-    fetchSensors,
-    fetchRecentEvents,
-    arm,
-    disarm,
-    cancelArming,
-    connectWebSocket,
-    disconnectWebSocket,
-    clearError,
-  } = useAlarmStore()
+  const queryClient = useQueryClient()
+  const { isAuthenticated } = useAuthStore()
+  const ws = useWebSocket()
 
-  // Initialize on mount
-  useEffect(() => {
-    fetchAlarmState()
-    fetchSettings()
-    fetchSensors()
-    fetchRecentEvents()
-    connectWebSocket()
+  const alarmStateQuery = useQuery({
+    queryKey: queryKeys.alarm.state,
+    queryFn: alarmService.getState,
+    enabled: isAuthenticated,
+  })
 
-    return () => {
-      disconnectWebSocket()
-    }
-  }, [fetchAlarmState, fetchSettings, fetchSensors, fetchRecentEvents, connectWebSocket, disconnectWebSocket])
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.alarm.settings,
+    queryFn: alarmService.getSettings,
+    enabled: isAuthenticated,
+  })
 
-  // Computed values
+  const sensorsQuery = useQuery({
+    queryKey: queryKeys.sensors.all,
+    queryFn: sensorsService.getSensors,
+    enabled: isAuthenticated,
+  })
+
+  const recentEventsQuery = useQuery({
+    queryKey: queryKeys.events.recent,
+    queryFn: () => alarmService.getRecentEvents(10),
+    enabled: isAuthenticated,
+  })
+
+  const countdownQuery = useQuery<CountdownPayload | null>({
+    queryKey: queryKeys.alarm.countdown,
+    queryFn: async () => null,
+    initialData: null,
+    enabled: false,
+  })
+
+  const armMutation = useMutation({
+    mutationFn: ({ targetState, code }: { targetState: AlarmStateType; code?: string }) =>
+      alarmService.arm({ targetState, code }),
+    onSuccess: (nextState) => {
+      queryClient.setQueryData(queryKeys.alarm.state, nextState)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.events.recent })
+    },
+  })
+
+  const disarmMutation = useMutation({
+    mutationFn: ({ code }: { code: string }) => alarmService.disarm({ code }),
+    onSuccess: (nextState) => {
+      queryClient.setQueryData(queryKeys.alarm.state, nextState)
+      queryClient.setQueryData(queryKeys.alarm.countdown, null)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.events.recent })
+    },
+  })
+
+  const cancelArmingMutation = useMutation({
+    mutationFn: ({ code }: { code?: string }) => alarmService.cancelArming(code),
+    onSuccess: (nextState) => {
+      queryClient.setQueryData(queryKeys.alarm.state, nextState)
+      queryClient.setQueryData(queryKeys.alarm.countdown, null)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.events.recent })
+    },
+  })
+
+  const alarmState: AlarmStateSnapshot | null = alarmStateQuery.data ?? null
+  const settings: AlarmSettingsProfile | null = settingsQuery.data ?? null
+  const sensors: Sensor[] = sensorsQuery.data ?? []
+  const recentEvents: AlarmEvent[] = recentEventsQuery.data ?? []
+  const countdown: CountdownPayload | null = countdownQuery.data ?? null
+
+  const isLoading =
+    alarmStateQuery.isLoading ||
+    settingsQuery.isLoading ||
+    sensorsQuery.isLoading ||
+    recentEventsQuery.isLoading ||
+    armMutation.isPending ||
+    disarmMutation.isPending ||
+    cancelArmingMutation.isPending
+
+  const error =
+    (alarmStateQuery.error as { message?: string } | null)?.message ||
+    (settingsQuery.error as { message?: string } | null)?.message ||
+    (sensorsQuery.error as { message?: string } | null)?.message ||
+    (recentEventsQuery.error as { message?: string } | null)?.message ||
+    (armMutation.error as { message?: string } | null)?.message ||
+    (disarmMutation.error as { message?: string } | null)?.message ||
+    (cancelArmingMutation.error as { message?: string } | null)?.message ||
+    null
+
   const currentState = alarmState?.currentState ?? AlarmState.DISARMED
   const armedStates: string[] = [
     AlarmState.ARMED_HOME,
@@ -51,31 +109,8 @@ export function useAlarm() {
   const isPending = currentState === AlarmState.PENDING
   const isTriggered = currentState === AlarmState.TRIGGERED
 
-  // Actions with state awareness
-  const armHome = useCallback(
-    (code?: string) => arm(AlarmState.ARMED_HOME, code),
-    [arm]
-  )
-
-  const armAway = useCallback(
-    (code?: string) => arm(AlarmState.ARMED_AWAY, code),
-    [arm]
-  )
-
-  const armNight = useCallback(
-    (code?: string) => arm(AlarmState.ARMED_NIGHT, code),
-    [arm]
-  )
-
-  const armVacation = useCallback(
-    (code?: string) => arm(AlarmState.ARMED_VACATION, code),
-    [arm]
-  )
-
-  // Check if code is required for arming
   const codeRequiredForArm = settings?.codeArmRequired ?? true
 
-  // Get available arming states
   const availableArmingStates = settings?.availableArmingStates ?? [
     AlarmState.ARMED_HOME,
     AlarmState.ARMED_AWAY,
@@ -83,33 +118,77 @@ export function useAlarm() {
     AlarmState.ARMED_VACATION,
   ]
 
-  const isUsedInRules = (sensor: (typeof sensors)[number]) => sensor.usedInRules !== false
+  const isUsedInRules = (sensor: Sensor) => sensor.usedInRules !== false
 
-  // Check for open sensors that might prevent arming (only entities in enabled rules)
-  const openSensors = sensors.filter(
-    (sensor) => isUsedInRules(sensor) && sensor.currentState === 'open' && sensor.isActive
+  const openSensors = useMemo(
+    () =>
+      sensors.filter((sensor) => isUsedInRules(sensor) && sensor.currentState === 'open' && sensor.isActive),
+    [sensors]
   )
 
-  // "Down/unavailable" sensors: configured but status can't be read
-  const unknownSensors = sensors.filter(
-    (sensor) => isUsedInRules(sensor) && sensor.isActive && sensor.entityId && sensor.currentState === 'unknown'
+  const unknownSensors = useMemo(
+    () =>
+      sensors.filter(
+        (sensor) =>
+          isUsedInRules(sensor) &&
+          sensor.isActive &&
+          !!sensor.entityId &&
+          sensor.currentState === 'unknown'
+      ),
+    [sensors]
   )
 
   const canArm = openSensors.length === 0 || settings?.sensorBehavior?.forceArmEnabled
 
+  const arm = useCallback(
+    async (targetState: AlarmStateType, code?: string) => {
+      await armMutation.mutateAsync({ targetState, code })
+    },
+    [armMutation]
+  )
+
+  const disarm = useCallback(
+    async (code: string) => {
+      await disarmMutation.mutateAsync({ code })
+    },
+    [disarmMutation]
+  )
+
+  const cancelArming = useCallback(
+    async (code?: string) => {
+      await cancelArmingMutation.mutateAsync({ code })
+    },
+    [cancelArmingMutation]
+  )
+
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.alarm.state })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.sensors.all })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.events.recent })
+  }, [queryClient])
+
+  const clearError = useCallback(() => {
+    armMutation.reset()
+    disarmMutation.reset()
+    cancelArmingMutation.reset()
+  }, [armMutation, disarmMutation, cancelArmingMutation])
+
+  const armHome = useCallback((code?: string) => arm(AlarmState.ARMED_HOME, code), [arm])
+  const armAway = useCallback((code?: string) => arm(AlarmState.ARMED_AWAY, code), [arm])
+  const armNight = useCallback((code?: string) => arm(AlarmState.ARMED_NIGHT, code), [arm])
+  const armVacation = useCallback((code?: string) => arm(AlarmState.ARMED_VACATION, code), [arm])
+
   return {
-    // State
     alarmState,
     currentState,
     settings,
     sensors,
     recentEvents,
-    wsStatus,
+    wsStatus: ws.status,
     countdown,
     isLoading,
     error,
 
-    // Computed
     isArmed,
     isDisarmed,
     isArming,
@@ -121,7 +200,6 @@ export function useAlarm() {
     unknownSensors,
     canArm,
 
-    // Actions
     arm,
     armHome,
     armAway,
@@ -130,19 +208,12 @@ export function useAlarm() {
     disarm,
     cancelArming,
     clearError,
-
-    // Refresh
-    refresh: useCallback(() => {
-      fetchAlarmState()
-      fetchSensors()
-      fetchRecentEvents()
-    }, [fetchAlarmState, fetchSensors, fetchRecentEvents]),
+    refresh,
   }
 }
 
 export function useAlarmState() {
-  const { alarmState, currentState, isArmed, isDisarmed, isArming, isPending, isTriggered } =
-    useAlarm()
+  const { alarmState, currentState, isArmed, isDisarmed, isArming, isPending, isTriggered } = useAlarm()
 
   return {
     alarmState,
@@ -156,3 +227,4 @@ export function useAlarmState() {
 }
 
 export default useAlarm
+

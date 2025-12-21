@@ -1,5 +1,5 @@
 import { API_BASE_URL, StorageKeys } from '@/lib/constants'
-import type { ApiError } from '@/types'
+import type { ApiError, PaginatedResponse } from '@/types'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
@@ -218,6 +218,21 @@ class ApiClient {
     params?: Record<string, string | number | boolean | undefined>
   ): Promise<T> {
     const response = await this.get<{ data: T }>(endpoint, params)
+    return response.data
+  }
+
+  async getPaginated<T>(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): Promise<PaginatedResponse<T>> {
+    return this.get<PaginatedResponse<T>>(endpoint, params)
+  }
+
+  async getPaginatedItems<T>(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): Promise<T[]> {
+    const response = await this.getPaginated<T>(endpoint, params)
     return response.data
   }
 

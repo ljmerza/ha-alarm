@@ -18,10 +18,7 @@ class LoginView(APIView):
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
 
-        try:
-            result = auth_uc.login(request=request, email=email, password=password)
-        except auth_uc.InvalidCredentials as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+        result = auth_uc.login(request=request, email=email, password=password)
         return Response(
             {
                 "user": UserSerializer(result.user).data,
@@ -49,12 +46,8 @@ class RefreshTokenView(APIView):
                 {"detail": "Missing refresh token."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        try:
-            token = auth_uc.refresh_token(refresh=refresh)
-        except auth_uc.InvalidRefreshToken as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+        token = auth_uc.refresh_token(refresh=refresh)
         return Response(
             {"accessToken": token.key, "refreshToken": token.key},
             status=status.HTTP_200_OK,
         )
-

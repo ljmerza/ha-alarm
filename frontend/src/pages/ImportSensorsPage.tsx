@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, Search, Shield, Loader2 } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Routes } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/errors'
 import { homeAssistantService, sensorsService } from '@/services'
-import { useAlarmStore } from '@/stores'
+import { useAuthStore } from '@/stores'
 import type { HomeAssistantEntity } from '@/services/homeAssistant'
+import { queryKeys } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -30,7 +32,15 @@ export function ImportSensorsPage() {
   const entrySensorSuggestedHelp =
     'Suggested based on the Home Assistant device class (door/window/garage_door).'
 
-  const { sensors, fetchSensors, fetchAlarmState } = useAlarmStore()
+  const queryClient = useQueryClient()
+  const { isAuthenticated } = useAuthStore()
+  const sensorsQuery = useQuery({
+    queryKey: queryKeys.sensors.all,
+    queryFn: sensorsService.getSensors,
+    enabled: isAuthenticated,
+  })
+  const sensors = sensorsQuery.data ?? []
+
   const [query, setQuery] = useState('')
   const [entities, setEntities] = useState<HomeAssistantEntity[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -72,8 +82,9 @@ export function ImportSensorsPage() {
     setError(null)
     setSuccess(null)
 
-    Promise.all([fetchSensors(), homeAssistantService.getStatus()])
-      .then(([, status]) => {
+    homeAssistantService
+      .getStatus()
+      .then((status) => {
         if (!mounted) return
         if (!status.configured) {
           setError('Home Assistant is not configured. Set HA_URL/HA_TOKEN in .env and restart.')
@@ -102,7 +113,7 @@ export function ImportSensorsPage() {
     return () => {
       mounted = false
     }
-  }, [fetchSensors])
+  }, [])
 
   useEffect(() => {
     setVisibleCount(50)
@@ -163,8 +174,8 @@ export function ImportSensorsPage() {
         importedNames.push(name || entity.entityId)
       }
 
-      await fetchSensors()
-      await fetchAlarmState()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.sensors.all })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.alarm.state })
       setSelected({})
       setSuccess({ count: importedNames.length, names: importedNames.slice(0, 5) })
     } catch (err) {

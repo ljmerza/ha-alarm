@@ -35,7 +35,7 @@ export const codesService = {
     id: number,
     params?: PaginationParams
   ): Promise<PaginatedResponse<CodeUsage>> {
-    return api.get<PaginatedResponse<CodeUsage>>(`/api/codes/${id}/usage/`, params ? { ...params } : undefined)
+    return api.getPaginated<CodeUsage>(`/api/codes/${id}/usage/`, params ? { ...params } : undefined)
   },
 
   async validateCode(request: ValidateCodeRequest): Promise<ValidateCodeResponse> {
