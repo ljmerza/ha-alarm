@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from alarm import home_assistant, services
+from alarm import services
+from alarm.gateways.home_assistant import HomeAssistantGateway, default_home_assistant_gateway
 from alarm.models import Rule
 
 
@@ -13,17 +14,6 @@ class AlarmServices(Protocol):
     def trigger(self, *, user=None, reason: str = ""): ...
 
 
-class HomeAssistantGateway(Protocol):
-    def call_service(
-        self,
-        *,
-        domain: str,
-        service: str,
-        target: dict[str, Any] | None = None,
-        service_data: dict[str, Any] | None = None,
-    ) -> None: ...
-
-
 def execute_actions(
     *,
     rule: Rule,
@@ -31,7 +21,7 @@ def execute_actions(
     now,
     actor_user=None,
     alarm_services: AlarmServices = services,
-    ha: HomeAssistantGateway = home_assistant,
+    ha: HomeAssistantGateway = default_home_assistant_gateway,
 ) -> dict[str, Any]:
     snapshot_before = alarm_services.get_current_snapshot(process_timers=True)
     alarm_state_before = snapshot_before.current_state

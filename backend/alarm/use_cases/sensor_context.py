@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db.models import Max
 
-from alarm import home_assistant
+from alarm.gateways.home_assistant import HomeAssistantGateway, default_home_assistant_gateway
 from alarm.models import AlarmEvent, AlarmEventType, Entity, RuleEntityRef, Sensor
 
 
@@ -16,16 +16,17 @@ def _overlay_entity_states_from_home_assistant(
     *,
     entity_state_by_entity_id: dict[str, str | None],
     entity_ids: set[str],
+    ha_gateway: HomeAssistantGateway,
 ) -> None:
     if not entity_ids:
         return
 
-    status_obj = home_assistant.get_status()
+    status_obj = ha_gateway.get_status()
     if not status_obj.configured or not status_obj.reachable:
         return
 
     try:
-        for item in home_assistant.list_entities():
+        for item in ha_gateway.list_entities():
             if not isinstance(item, dict):
                 continue
             entity_id = item.get("entity_id")
@@ -56,13 +57,19 @@ def _last_triggered_by_sensor_id(*, sensors: list[Sensor]) -> dict[int, object]:
     )
 
 
-def sensor_list_serializer_context(*, sensors: list[Sensor], prefer_home_assistant_live_state: bool = True) -> dict:
+def sensor_list_serializer_context(
+    *,
+    sensors: list[Sensor],
+    prefer_home_assistant_live_state: bool = True,
+    ha_gateway: HomeAssistantGateway = default_home_assistant_gateway,
+) -> dict:
     entity_ids = {(s.entity_id or "").strip() for s in sensors if (s.entity_id or "").strip()}
     entity_state_by_entity_id = _entity_states_from_db(entity_ids)
     if prefer_home_assistant_live_state:
         _overlay_entity_states_from_home_assistant(
             entity_state_by_entity_id=entity_state_by_entity_id,
             entity_ids=entity_ids,
+            ha_gateway=ha_gateway,
         )
 
     return {
@@ -72,13 +79,19 @@ def sensor_list_serializer_context(*, sensors: list[Sensor], prefer_home_assista
     }
 
 
-def sensor_detail_serializer_context(*, sensor: Sensor, prefer_home_assistant_live_state: bool = True) -> dict:
+def sensor_detail_serializer_context(
+    *,
+    sensor: Sensor,
+    prefer_home_assistant_live_state: bool = True,
+    ha_gateway: HomeAssistantGateway = default_home_assistant_gateway,
+) -> dict:
     entity_ids = {(sensor.entity_id or "").strip()} if (sensor.entity_id or "").strip() else set()
     entity_state_by_entity_id = _entity_states_from_db(entity_ids)
     if prefer_home_assistant_live_state:
         _overlay_entity_states_from_home_assistant(
             entity_state_by_entity_id=entity_state_by_entity_id,
             entity_ids=entity_ids,
+            ha_gateway=ha_gateway,
         )
 
     return {
@@ -86,4 +99,3 @@ def sensor_detail_serializer_context(*, sensor: Sensor, prefer_home_assistant_li
         "last_triggered_by_sensor_id": _last_triggered_by_sensor_id(sensors=[sensor]),
         "used_entity_ids_in_rules": _used_entity_ids_in_enabled_rules(),
     }
-

@@ -12,6 +12,7 @@ from . import rules_engine
 from .use_cases import alarm_actions
 from .use_cases.entity_sync import sync_entities_from_home_assistant
 from .use_cases.sensor_context import sensor_detail_serializer_context, sensor_list_serializer_context
+from .gateways.home_assistant import default_home_assistant_gateway
 from .models import AlarmEvent, AlarmSettingsProfile, AlarmState, Entity, Rule, Sensor
 from .serializers import (
     AlarmEventSerializer,
@@ -34,15 +35,15 @@ class AlarmStateView(APIView):
 
 class HomeAssistantStatusView(APIView):
     def get(self, request):
-        status_obj = home_assistant.get_status()
+        status_obj = default_home_assistant_gateway.get_status()
         return Response(status_obj.as_dict(), status=status.HTTP_200_OK)
 
 
 class HomeAssistantEntitiesView(APIView):
     def get(self, request):
         try:
-            home_assistant.ensure_available()
-            entities = home_assistant.list_entities()
+            default_home_assistant_gateway.ensure_available()
+            entities = default_home_assistant_gateway.list_entities()
         except home_assistant.HomeAssistantNotConfigured:
             return Response(
                 {"detail": "Home Assistant is not configured."},
@@ -70,8 +71,8 @@ class EntitiesView(APIView):
 class EntitySyncView(APIView):
     def post(self, request):
         try:
-            home_assistant.ensure_available()
-            items = home_assistant.list_entities()
+            default_home_assistant_gateway.ensure_available()
+            items = default_home_assistant_gateway.list_entities()
         except home_assistant.HomeAssistantNotConfigured:
             return Response(
                 {"detail": "Home Assistant is not configured."},

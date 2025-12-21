@@ -7,9 +7,6 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
-
-from alarm.models import AlarmSettingsProfile, AlarmStateSnapshot, Sensor
 
 from .models import User, UserCode
 from .policies import is_admin
@@ -21,8 +18,10 @@ from .serializers import (
     UserCodeUpdateSerializer,
     UserSerializer,
 )
+from .use_cases import auth as auth_uc
 from .use_cases import onboarding as onboarding_uc
 from .use_cases import codes as codes_uc
+from .use_cases.setup_status import compute_setup_status
 
 
 class OnboardingView(APIView):
@@ -62,19 +61,15 @@ class LoginView(APIView):
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
 
-        user = authenticate(request, username=email, password=password)
-        if not user:
-            return Response(
-                {"detail": "Invalid credentials."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        token, _ = Token.objects.get_or_create(user=user)
-        update_last_login(None, user)
+        try:
+            result = auth_uc.login(request=request, email=email, password=password)
+        except auth_uc.InvalidCredentials as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(
             {
-                "user": UserSerializer(user).data,
-                "accessToken": token.key,
-                "refreshToken": token.key,
+                "user": UserSerializer(result.user).data,
+                "accessToken": result.token.key,
+                "refreshToken": result.token.key,
                 "requires2FA": False,
             },
             status=status.HTTP_200_OK,
@@ -83,9 +78,7 @@ class LoginView(APIView):
 
 class LogoutView(APIView):
     def post(self, request):
-        token = Token.objects.filter(user=request.user).first()
-        if token:
-            token.delete()
+        auth_uc.logout(user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -99,12 +92,10 @@ class RefreshTokenView(APIView):
                 {"detail": "Missing refresh token."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        token = Token.objects.filter(key=refresh).first()
-        if not token:
-            return Response(
-                {"detail": "Invalid refresh token."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+        try:
+            token = auth_uc.refresh_token(refresh=refresh)
+        except auth_uc.InvalidRefreshToken as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(
             {"accessToken": token.key, "refreshToken": token.key},
             status=status.HTTP_200_OK,
@@ -126,28 +117,7 @@ class UsersView(APIView):
 
 class SetupStatusView(APIView):
     def get(self, request):
-        has_active_settings_profile = AlarmSettingsProfile.objects.filter(is_active=True).exists()
-        has_alarm_snapshot = AlarmStateSnapshot.objects.exists()
-        has_alarm_code = UserCode.objects.filter(user=request.user, is_active=True).exists()
-        has_sensors = Sensor.objects.exists()
-        home_assistant_connected = False
-
-        setup_required = not (has_alarm_code and has_active_settings_profile and has_alarm_snapshot)
-
-        return Response(
-            {
-                "onboarding_required": False,
-                "setup_required": setup_required,
-                "requirements": {
-                    "has_active_settings_profile": has_active_settings_profile,
-                    "has_alarm_snapshot": has_alarm_snapshot,
-                    "has_alarm_code": has_alarm_code,
-                    "has_sensors": has_sensors,
-                    "home_assistant_connected": home_assistant_connected,
-                },
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response(compute_setup_status(user=request.user), status=status.HTTP_200_OK)
 
 
 class CodesView(APIView):
