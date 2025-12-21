@@ -25,13 +25,13 @@ class HomeAssistantStatusApiTests(APITestCase):
         self.assertFalse(response.data["reachable"])
 
     @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
-    @patch("alarm.home_assistant._get_client")
-    def test_status_reachable(self, mock_get_client):
-        class _Client:
-            def get_config(self):
-                return {"version": "1.0"}
+    @patch("alarm.views.home_assistant.ha_gateway")
+    def test_status_reachable(self, mock_gateway):
+        class _Status:
+            def as_dict(self):
+                return {"configured": True, "reachable": True, "base_url": "http://ha:8123", "error": None}
 
-        mock_get_client.return_value = _Client()
+        mock_gateway.get_status.return_value = _Status()
         url = reverse("ha-status")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -39,22 +39,17 @@ class HomeAssistantStatusApiTests(APITestCase):
         self.assertTrue(response.data["reachable"])
 
     @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
-    @patch("alarm.home_assistant._get_client")
-    def test_entities_returns_data(self, mock_get_client):
-        class _State:
-            entity_id = "binary_sensor.front_door"
-            state = "off"
-            attributes = {"friendly_name": "Front Door", "device_class": "door"}
-            last_changed = "2025-01-01T00:00:00Z"
-
-        class _Client:
-            def get_config(self):
-                return {"version": "1.0"}
-
-            def get_states(self):
-                return [_State()]
-
-        mock_get_client.return_value = _Client()
+    @patch("alarm.views.home_assistant.ha_gateway")
+    def test_entities_returns_data(self, mock_gateway):
+        mock_gateway.ensure_available.return_value = object()
+        mock_gateway.list_entities.return_value = [
+            {
+                "entity_id": "binary_sensor.front_door",
+                "state": "off",
+                "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+                "last_changed": "2025-01-01T00:00:00Z",
+            }
+        ]
         url = reverse("ha-entities")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -62,37 +57,29 @@ class HomeAssistantStatusApiTests(APITestCase):
         self.assertEqual(response.data["data"][0]["entity_id"], "binary_sensor.front_door")
 
     @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
-    @patch("alarm.home_assistant.get_status")
-    @patch("alarm.home_assistant.list_entities", side_effect=RuntimeError("boom"))
-    def test_entities_handles_list_failure(self, mock_list_entities, mock_get_status):
-        class _Status:
-            configured = True
-            reachable = True
-            error = None
-
-        mock_get_status.return_value = _Status()
+    @patch("alarm.views.home_assistant.ha_gateway")
+    def test_entities_handles_list_failure(self, mock_gateway):
+        mock_gateway.ensure_available.return_value = object()
+        mock_gateway.list_entities.side_effect = RuntimeError("boom")
         url = reverse("ha-entities")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["detail"], "Failed to fetch Home Assistant entities.")
 
     @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
-    @patch("alarm.home_assistant._get_client")
-    def test_entity_sync_imports_entities(self, mock_get_client):
-        class _State:
-            entity_id = "binary_sensor.front_door"
-            state = "off"
-            attributes = {"friendly_name": "Front Door", "device_class": "door"}
-            last_changed = "2025-01-01T00:00:00Z"
-
-        class _Client:
-            def get_config(self):
-                return {"version": "1.0"}
-
-            def get_states(self):
-                return [_State()]
-
-        mock_get_client.return_value = _Client()
+    @patch("alarm.views.entities.ha_gateway")
+    def test_entity_sync_imports_entities(self, mock_gateway):
+        mock_gateway.ensure_available.return_value = object()
+        mock_gateway.list_entities.return_value = [
+            {
+                "entity_id": "binary_sensor.front_door",
+                "domain": "binary_sensor",
+                "name": "Front Door",
+                "state": "off",
+                "device_class": "door",
+                "last_changed": "2025-01-01T00:00:00Z",
+            }
+        ]
 
         url = reverse("alarm-entities-sync")
         response = self.client.post(url)

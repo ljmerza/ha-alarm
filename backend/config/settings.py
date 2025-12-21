@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import environ
@@ -152,6 +153,9 @@ HOME_ASSISTANT_TOKEN = (
     env.str("HOME_ASSISTANT_TOKEN", default="").strip()
     or env.str("HA_TOKEN", default="").strip()
 )
+if "test" in sys.argv and not env.bool("ALLOW_HOME_ASSISTANT_IN_TESTS", default=False):
+    HOME_ASSISTANT_URL = ""
+    HOME_ASSISTANT_TOKEN = ""
 
 LOGGING = {
     "version": 1,

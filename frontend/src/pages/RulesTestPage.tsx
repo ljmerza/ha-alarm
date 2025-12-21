@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { entitiesService, rulesService } from '@/services'
+import { rulesService } from '@/services'
 import type { Entity } from '@/types'
 import { queryKeys } from '@/types'
 import { Tooltip } from '@/components/ui/tooltip'
@@ -18,6 +18,7 @@ import { DatalistInput } from '@/components/ui/datalist-input'
 import { EmptyState } from '@/components/ui/empty-state'
 import { getErrorMessage } from '@/lib/errors'
 import type { RuleSimulateResult } from '@/types'
+import { useEntitiesQuery, useSyncEntitiesMutation } from '@/hooks'
 
 type Row = { id: string; entityId: string; state: string }
 
@@ -65,10 +66,7 @@ function saveSavedScenarios(scenarios: SavedScenario[]) {
 export function RulesTestPage() {
   const queryClient = useQueryClient()
 
-  const entitiesQuery = useQuery({
-    queryKey: queryKeys.entities.all,
-    queryFn: entitiesService.list,
-  })
+  const entitiesQuery = useEntitiesQuery()
 
   const entities: Entity[] = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
   const [rows, setRows] = useState<Row[]>([{ id: uniqueId(), entityId: '', state: 'on' }])
@@ -97,17 +95,15 @@ export function RulesTestPage() {
     setSavedScenarios(loadSavedScenarios())
   }, [])
 
-  const syncEntitiesMutation = useMutation({
-    mutationFn: entitiesService.sync,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
-    },
-    onError: (err) => setError(getErrorMessage(err) || 'Failed to sync entities'),
-  })
+  const syncEntitiesMutation = useSyncEntitiesMutation()
 
   const syncEntities = async () => {
     setError(null)
-    await syncEntitiesMutation.mutateAsync()
+    try {
+      await syncEntitiesMutation.mutateAsync()
+    } catch (err) {
+      setError(getErrorMessage(err) || 'Failed to sync entities')
+    }
   }
 
   const isLoading = entitiesQuery.isLoading || entitiesQuery.isFetching || syncEntitiesMutation.isPending

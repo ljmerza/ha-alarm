@@ -210,22 +210,21 @@ class AlarmApiTests(APITestCase):
         self.assertEqual(by_entity_id["binary_sensor.unused"]["used_in_rules"], False)
 
     @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
-    @patch("alarm.home_assistant._get_client")
-    def test_get_sensors_prefers_home_assistant_live_state(self, mock_get_client):
-        class _State:
-            entity_id = "binary_sensor.front_door"
-            state = "on"
-            attributes = {"friendly_name": "Front Door", "device_class": "door"}
-            last_changed = "2025-01-01T00:00:00Z"
+    @patch("alarm.views.sensors.ha_gateway")
+    def test_get_sensors_prefers_home_assistant_live_state(self, mock_gateway):
+        class _Status:
+            configured = True
+            reachable = True
 
-        class _Client:
-            def get_config(self):
-                return {"version": "1.0"}
-
-            def get_states(self):
-                return [_State()]
-
-        mock_get_client.return_value = _Client()
+        mock_gateway.get_status.return_value = _Status()
+        mock_gateway.list_entities.return_value = [
+            {
+                "entity_id": "binary_sensor.front_door",
+                "state": "on",
+                "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+                "last_changed": "2025-01-01T00:00:00Z",
+            }
+        ]
 
         Sensor.objects.create(
             name="Front Door",

@@ -1,12 +1,10 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useAuthStore } from '@/stores'
-import { codesService, usersService } from '@/services'
 import { AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
 import type { AlarmStateType, UserRoleType } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/errors'
-import type { AlarmCode, CreateCodeRequest, UpdateCodeRequest, User } from '@/types'
-import { queryKeys } from '@/types'
+import type { AlarmCode, UpdateCodeRequest, User } from '@/types'
+import { useCodesQuery, useCreateCodeMutation, useUpdateCodeMutation, useUsersQuery } from '@/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,42 +81,21 @@ export function CodesPage() {
 }
 
 function CodesPageContent() {
-  const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const isAdmin = isAdminRole(user?.role)
 
   const [selectedUserId, setSelectedUserId] = useState<string>('')
 
-  const usersQuery = useQuery({
-    queryKey: queryKeys.users.all,
-    queryFn: usersService.listUsers,
-    enabled: isAdmin,
-  })
+  const usersQuery = useUsersQuery(isAdmin)
 
   const selectedUserIdOrDefault = selectedUserId || user?.id || ''
   const targetUserId = isAdmin ? selectedUserIdOrDefault : user?.id || ''
 
-  const codesQueryKey = useMemo(() => ['codes', targetUserId], [targetUserId])
+  const codesQuery = useCodesQuery({ userId: targetUserId, isAdmin })
 
-  const codesQuery = useQuery({
-    queryKey: codesQueryKey,
-    queryFn: () => codesService.getCodes(isAdmin ? { userId: targetUserId } : undefined),
-    enabled: !!targetUserId,
-  })
+  const createMutation = useCreateCodeMutation(targetUserId)
 
-  const createMutation = useMutation({
-    mutationFn: (req: CreateCodeRequest) => codesService.createCode(req),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: codesQueryKey })
-    },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, req }: { id: number; req: UpdateCodeRequest }) => codesService.updateCode(id, req),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: codesQueryKey })
-    },
-  })
+  const updateMutation = useUpdateCodeMutation(targetUserId)
 
   const [createLabel, setCreateLabel] = useState<string>('')
   const [createCode, setCreateCode] = useState<string>('')

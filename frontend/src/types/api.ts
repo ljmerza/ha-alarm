@@ -70,6 +70,7 @@ export const queryKeys = {
   },
   codes: {
     all: ['codes'] as const,
+    byUser: (userId: string) => ['codes', 'byUser', userId] as const,
     detail: (id: number) => ['codes', id] as const,
     usage: (id: number) => ['codes', id, 'usage'] as const,
   },
