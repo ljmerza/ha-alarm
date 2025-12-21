@@ -7,6 +7,10 @@ import { entitiesService, rulesService } from '@/services'
 import type { Entity, Rule, RuleKind } from '@/types'
 import { Link } from 'react-router-dom'
 import { Routes } from '@/lib/constants'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { PageHeader } from '@/components/ui/page-header'
+import { HelpTip } from '@/components/ui/help-tip'
+import { Select } from '@/components/ui/select'
 
 const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'trigger', label: 'Trigger' },
@@ -49,6 +53,16 @@ function parseEntityIds(value: string): string[] {
 
 function uniqueId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function countThenActions(definition: unknown): number {
+  if (!isRecord(definition)) return 0
+  const thenValue = definition.then
+  return Array.isArray(thenValue) ? thenValue.length : 0
 }
 
 function buildDefinitionFromBuilder(
@@ -198,9 +212,10 @@ export function RulesPage() {
 
   useEffect(() => {
     if (advanced) return
-    const forSeconds =
+    const parsedForSeconds =
       forSecondsText.trim() === '' ? null : Number.parseInt(forSecondsText.trim(), 10)
-    const seconds = forSecondsText.trim() !== '' && Number.isNaN(forSeconds as any) ? null : forSeconds
+    const seconds =
+      typeof parsedForSeconds === 'number' && Number.isNaN(parsedForSeconds) ? null : parsedForSeconds
     const def = buildDefinitionFromBuilder(whenOperator, conditions, seconds, actions)
     setDefinitionText(JSON.stringify(def, null, 2))
     setEntityIdsText(derivedEntityIds.join('\n'))
@@ -225,8 +240,8 @@ export function RulesPage() {
       const asObj = def as Record<string, unknown>
 
       const nextConditions: ConditionRow[] = []
-      const addEntityState = (node: any, negate = false) => {
-        if (!node || typeof node !== 'object') return
+      const addEntityState = (node: unknown, negate = false) => {
+        if (!isRecord(node)) return
         if (node.op === 'entity_state' && typeof node.entity_id === 'string') {
           nextConditions.push({
             id: uniqueId(),
@@ -237,19 +252,23 @@ export function RulesPage() {
         }
       }
 
-      let baseWhen = asObj.when as any
-      if (baseWhen && baseWhen.op === 'for' && typeof baseWhen.seconds === 'number') {
+      let baseWhen: unknown = asObj.when
+      if (isRecord(baseWhen) && baseWhen.op === 'for' && typeof baseWhen.seconds === 'number') {
         setForSecondsText(String(baseWhen.seconds))
         baseWhen = baseWhen.child
       } else {
         setForSecondsText('')
       }
 
-      if (baseWhen && (baseWhen.op === 'all' || baseWhen.op === 'any') && Array.isArray(baseWhen.children)) {
-        setWhenOperator(baseWhen.op)
+      if (
+        isRecord(baseWhen) &&
+        (baseWhen.op === 'all' || baseWhen.op === 'any') &&
+        Array.isArray(baseWhen.children)
+      ) {
+        setWhenOperator(baseWhen.op as WhenOperator)
         for (const child of baseWhen.children) {
-          if (child && typeof child === 'object' && (child as any).op === 'not') {
-            addEntityState((child as any).child, true)
+          if (isRecord(child) && child.op === 'not') {
+            addEntityState(child.child, true)
           } else {
             addEntityState(child, false)
           }
@@ -267,21 +286,25 @@ export function RulesPage() {
       const nextActions: ActionRow[] = []
       if (Array.isArray(asObj.then)) {
         for (const action of asObj.then) {
-          if (!action || typeof action !== 'object') continue
-          const a: any = action
-          if (a.type === 'alarm_disarm') nextActions.push({ id: uniqueId(), type: 'alarm_disarm' })
-          if (a.type === 'alarm_trigger') nextActions.push({ id: uniqueId(), type: 'alarm_trigger' })
-          if (a.type === 'alarm_arm' && typeof a.mode === 'string') {
-            nextActions.push({ id: uniqueId(), type: 'alarm_arm', mode: a.mode })
+          if (!isRecord(action)) continue
+          const type = action.type
+          if (type === 'alarm_disarm') nextActions.push({ id: uniqueId(), type: 'alarm_disarm' })
+          if (type === 'alarm_trigger') nextActions.push({ id: uniqueId(), type: 'alarm_trigger' })
+          if (type === 'alarm_arm' && typeof action.mode === 'string') {
+            nextActions.push({ id: uniqueId(), type: 'alarm_arm', mode: action.mode as AlarmArmMode })
           }
-          if (a.type === 'ha_call_service') {
+          if (type === 'ha_call_service') {
+            const target = isRecord(action.target) ? action.target : null
+            const targetEntityIds = Array.isArray(target?.entity_ids)
+              ? (target?.entity_ids as unknown[]).map(String).join(', ')
+              : ''
             nextActions.push({
               id: uniqueId(),
               type: 'ha_call_service',
-              domain: typeof a.domain === 'string' ? a.domain : '',
-              service: typeof a.service === 'string' ? a.service : '',
-              targetEntityIds: Array.isArray(a.target?.entity_ids) ? a.target.entity_ids.join(', ') : '',
-              serviceDataJson: JSON.stringify(a.service_data ?? {}, null, 2),
+              domain: typeof action.domain === 'string' ? action.domain : '',
+              service: typeof action.service === 'string' ? action.service : '',
+              targetEntityIds,
+              serviceDataJson: JSON.stringify(action.service_data ?? {}, null, 2),
             })
           }
         }
@@ -373,36 +396,40 @@ export function RulesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Rules</h1>
-          <p className="text-muted-foreground">Create trigger/disarm/arm rules (builder MVP).</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Tooltip content="Imports/updates the local Entity Registry from Home Assistant, so entity IDs autocomplete and can be referenced in rules.">
-            <Button type="button" variant="outline" onClick={syncEntities} disabled={isSaving}>
-              Sync Entities
+      <PageHeader
+        title="Rules"
+        description="Create trigger/disarm/arm rules (builder MVP)."
+        actions={
+          <>
+            <Tooltip content="Imports/updates the local Entity Registry from Home Assistant, so entity IDs autocomplete and can be referenced in rules.">
+              <Button type="button" variant="outline" onClick={syncEntities} disabled={isSaving}>
+                Sync Entities
+              </Button>
+            </Tooltip>
+            <Tooltip content="Runs enabled rules immediately using the server-side engine (useful for testing).">
+              <Button type="button" variant="outline" onClick={runRulesNow} disabled={isSaving}>
+                Run Rules
+              </Button>
+            </Tooltip>
+            <Button asChild type="button" variant="outline">
+              <Link to={Routes.RULES_TEST}>Test Rules</Link>
             </Button>
-          </Tooltip>
-          <Tooltip content="Runs enabled rules immediately using the server-side engine (useful for testing).">
-            <Button type="button" variant="outline" onClick={runRulesNow} disabled={isSaving}>
-              Run Rules
+            <Button type="button" variant="outline" onClick={load} disabled={isSaving}>
+              Refresh
             </Button>
-          </Tooltip>
-          <Button asChild type="button" variant="outline">
-            <Link to={Routes.RULES_TEST}>Test Rules</Link>
-          </Button>
-          <Button type="button" variant="outline" onClick={load} disabled={isSaving}>
-            Refresh
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      {notice && <div className="rounded-md border bg-muted p-3 text-sm">{notice}</div>}
+      {notice && (
+        <Alert variant="info" layout="banner">
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      )}
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-          {error}
-        </div>
+        <Alert variant="error" layout="banner">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <Card>
@@ -413,20 +440,11 @@ export function RulesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">
-                Name{' '}
-                <Tooltip content="A human-friendly label for the rule.">
-                  <span
-                    tabIndex={0}
-                    aria-label="Help"
-                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    ?
-                  </span>
-                </Tooltip>
-              </label>
+	          <div className="grid gap-3 md:grid-cols-2">
+	            <div className="space-y-1">
+	              <label className="text-xs text-muted-foreground">
+	                Name <HelpTip className="ml-1" content="A human-friendly label for the rule." />
+	              </label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -436,43 +454,33 @@ export function RulesPage() {
 
             <div className="grid gap-3 grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">
-                  Kind{' '}
-                  <Tooltip content="What category the rule belongs to (trigger/disarm/arm/etc.). This is used for filtering and later conflict policy.">
-                    <span
-                      tabIndex={0}
-                      aria-label="Help"
-                      className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    >
-                      ?
-                    </span>
-                  </Tooltip>
-                </label>
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={kind}
-                  onChange={(e) => setKind(e.target.value as RuleKind)}
-                >
-                  {ruleKinds.map((k) => (
-                    <option key={k.value} value={k.value}>
-                      {k.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">
-                  Priority{' '}
-                  <Tooltip content="Higher priority rules are evaluated first (and may win if multiple rules match).">
-                    <span
-                      tabIndex={0}
-                      aria-label="Help"
-                      className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    >
-                      ?
-                    </span>
-                  </Tooltip>
-                </label>
+	                <label className="text-xs text-muted-foreground">
+	                  Kind{' '}
+	                  <HelpTip
+	                    className="ml-1"
+	                    content="What category the rule belongs to (trigger/disarm/arm/etc.). This is used for filtering and later conflict policy."
+	                  />
+	                </label>
+	                <Select
+	                  size="sm"
+	                  value={kind}
+	                  onChange={(e) => setKind(e.target.value as RuleKind)}
+	                >
+	                  {ruleKinds.map((k) => (
+	                    <option key={k.value} value={k.value}>
+	                      {k.label}
+	                    </option>
+	                  ))}
+	                </Select>
+	              </div>
+	              <div className="space-y-1">
+	                <label className="text-xs text-muted-foreground">
+	                  Priority{' '}
+	                  <HelpTip
+	                    className="ml-1"
+	                    content="Higher priority rules are evaluated first (and may win if multiple rules match)."
+	                  />
+	                </label>
                 <Input
                   value={String(priority)}
                   onChange={(e) => setPriority(Number.parseInt(e.target.value || '0', 10) || 0)}
@@ -483,25 +491,17 @@ export function RulesPage() {
 
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm" htmlFor="rule-enabled">
+	              <label className="flex items-center gap-2 text-sm" htmlFor="rule-enabled">
                 <input
                   id="rule-enabled"
                   type="checkbox"
                   checked={enabled}
                   onChange={(e) => setEnabled(e.target.checked)}
                 />
-                Enabled
-              </label>
-              <Tooltip content="Disabled rules are saved but ignored by the engine.">
-                <span
-                  tabIndex={0}
-                  aria-label="Help"
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  ?
-                </span>
-              </Tooltip>
-            </div>
+	                Enabled
+	              </label>
+	              <HelpTip content="Disabled rules are saved but ignored by the engine." />
+	            </div>
             <Button type="button" variant="outline" onClick={() => setAdvanced((v) => !v)}>
               {advanced ? 'Use Builder' : 'Advanced JSON'}
             </Button>
@@ -509,33 +509,23 @@ export function RulesPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">
-                Cooldown seconds (optional){' '}
-                <Tooltip content="Minimum time between fires for this rule (helps prevent spam/flapping).">
-                  <span
-                    tabIndex={0}
-                    aria-label="Help"
-                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    ?
-                  </span>
-                </Tooltip>
-              </label>
+	              <label className="text-xs text-muted-foreground">
+	                Cooldown seconds (optional){' '}
+	                <HelpTip
+	                  className="ml-1"
+	                  content="Minimum time between fires for this rule (helps prevent spam/flapping)."
+	                />
+	              </label>
               <Input value={cooldownSeconds} onChange={(e) => setCooldownSeconds(e.target.value)} placeholder="e.g., 60" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">
-                Referenced entity IDs{' '}
-                <Tooltip content="Used to quickly find which rules should re-evaluate when an entity changes. In Builder mode this is derived from your conditions; in Advanced mode you can edit it.">
-                  <span
-                    tabIndex={0}
-                    aria-label="Help"
-                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    ?
-                  </span>
-                </Tooltip>
-              </label>
+	              <label className="text-xs text-muted-foreground">
+	                Referenced entity IDs{' '}
+	                <HelpTip
+	                  className="ml-1"
+	                  content="Used to quickly find which rules should re-evaluate when an entity changes. In Builder mode this is derived from your conditions; in Advanced mode you can edit it."
+	                />
+	              </label>
               <textarea
                 className="min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={entityIdsText}
@@ -553,58 +543,39 @@ export function RulesPage() {
 
           {!advanced && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                When{' '}
-                <Tooltip content="The condition(s) that must match for the rule to fire.">
-                  <span
-                    tabIndex={0}
-                    aria-label="Help"
-                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    ?
-                  </span>
-                </Tooltip>
-              </CardTitle>
+	              <CardHeader>
+	                <CardTitle className="text-base">
+	                  When{' '}
+	                  <HelpTip
+	                    className="ml-1"
+	                    content="The condition(s) that must match for the rule to fire."
+	                  />
+	              </CardTitle>
                 <CardDescription>Match on entity state (equals) with AND/OR and optional “for”.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">
-                      Operator{' '}
-                      <Tooltip content="All = AND. Any = OR.">
-                        <span
-                          tabIndex={0}
-                          aria-label="Help"
-                          className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                        >
-                          ?
-                        </span>
-                      </Tooltip>
-                    </label>
-                    <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={whenOperator}
-                      onChange={(e) => setWhenOperator(e.target.value as WhenOperator)}
-                    >
-                      <option value="all">All (AND)</option>
-                      <option value="any">Any (OR)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">
-                      For seconds (optional){' '}
-                      <Tooltip content="Requires the whole condition group to remain true continuously for this many seconds.">
-                        <span
-                          tabIndex={0}
-                          aria-label="Help"
-                          className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                        >
-                          ?
-                        </span>
-                      </Tooltip>
-                    </label>
+	                  <div className="space-y-1">
+	                    <label className="text-xs text-muted-foreground">
+	                      Operator <HelpTip className="ml-1" content="All = AND. Any = OR." />
+	                    </label>
+	                    <Select
+	                      size="sm"
+	                      value={whenOperator}
+	                      onChange={(e) => setWhenOperator(e.target.value as WhenOperator)}
+	                    >
+	                      <option value="all">All (AND)</option>
+	                      <option value="any">Any (OR)</option>
+	                    </Select>
+	                  </div>
+	                  <div className="space-y-1">
+	                    <label className="text-xs text-muted-foreground">
+	                      For seconds (optional){' '}
+	                      <HelpTip
+	                        className="ml-1"
+	                        content="Requires the whole condition group to remain true continuously for this many seconds."
+	                      />
+	                    </label>
                     <Input value={forSecondsText} onChange={(e) => setForSecondsText(e.target.value)} placeholder="e.g., 300" />
                   </div>
                   <div className="text-xs text-muted-foreground flex items-end">
@@ -621,19 +592,14 @@ export function RulesPage() {
 
                   {conditions.map((row) => (
                     <div key={row.id} className="grid gap-2 md:grid-cols-12 items-end">
-                      <div className="md:col-span-5 space-y-1">
-                        <label className="text-xs text-muted-foreground">
-                          Entity ID{' '}
-                          <Tooltip content="A Home Assistant entity_id like binary_sensor.front_door. Use “Sync Entities” to get autocomplete.">
-                            <span
-                              tabIndex={0}
-                              aria-label="Help"
-                              className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                            >
-                              ?
-                            </span>
-                          </Tooltip>
-                        </label>
+	                      <div className="md:col-span-5 space-y-1">
+	                        <label className="text-xs text-muted-foreground">
+	                          Entity ID{' '}
+	                          <HelpTip
+	                            className="ml-1"
+	                            content="A Home Assistant entity_id like binary_sensor.front_door. Use “Sync Entities” to get autocomplete."
+	                          />
+	                        </label>
                         <input
                           list="entity-id-options"
                           className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -647,19 +613,14 @@ export function RulesPage() {
                           placeholder="binary_sensor.front_door"
                         />
                       </div>
-                      <div className="md:col-span-3 space-y-1">
-                        <label className="text-xs text-muted-foreground">
-                          Equals{' '}
-                          <Tooltip content="The expected state string. Common examples: on/off, open/closed, locked/unlocked.">
-                            <span
-                              tabIndex={0}
-                              aria-label="Help"
-                              className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                            >
-                              ?
-                            </span>
-                          </Tooltip>
-                        </label>
+	                      <div className="md:col-span-3 space-y-1">
+	                        <label className="text-xs text-muted-foreground">
+	                          Equals{' '}
+	                          <HelpTip
+	                            className="ml-1"
+	                            content="The expected state string. Common examples: on/off, open/closed, locked/unlocked."
+	                          />
+	                        </label>
                         <Input
                           value={row.equals}
                           onChange={(e) => {
@@ -682,19 +643,11 @@ export function RulesPage() {
                             )
                           }}
                         />
-                        <label htmlFor={`cond-negate-${row.id}`} className="text-sm">
-                          NOT
-                        </label>
-                        <Tooltip content="Negates this condition (NOT entity_state).">
-                          <span
-                            tabIndex={0}
-                            aria-label="Help"
-                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                          >
-                            ?
-                          </span>
-                        </Tooltip>
-                      </div>
+	                        <label htmlFor={`cond-negate-${row.id}`} className="text-sm">
+	                          NOT
+	                        </label>
+	                        <HelpTip content="Negates this condition (NOT entity_state)." />
+	                      </div>
                       <div className="md:col-span-2 flex gap-2 justify-end">
                         <Button
                           type="button"
@@ -732,19 +685,14 @@ export function RulesPage() {
 
           {!advanced && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                Then{' '}
-                <Tooltip content="The action(s) to execute when the rule matches. Multiple actions run in order.">
-                  <span
-                    tabIndex={0}
-                    aria-label="Help"
-                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    ?
-                  </span>
-                </Tooltip>
-              </CardTitle>
+	              <CardHeader>
+	                <CardTitle className="text-base">
+	                  Then{' '}
+	                  <HelpTip
+	                    className="ml-1"
+	                    content="The action(s) to execute when the rule matches. Multiple actions run in order."
+	                  />
+	              </CardTitle>
                 <CardDescription>Actions to run when the condition matches.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -765,25 +713,20 @@ export function RulesPage() {
 
                       <div className="grid gap-3 md:grid-cols-3">
                         <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">
-                            Type{' '}
-                            <Tooltip content="Alarm actions change alarm state. call_service triggers a Home Assistant service call.">
-                              <span
-                                tabIndex={0}
-                                aria-label="Help"
-                                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                              >
-                                ?
-                              </span>
-                            </Tooltip>
-                          </label>
-                          <select
-                            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                            value={a.type}
-                            onChange={(e) => {
-                              const type = e.target.value as ActionRow['type']
-                              setActions((prev) =>
-                                prev.map((row) => {
+	                          <label className="text-xs text-muted-foreground">
+	                            Type{' '}
+	                            <HelpTip
+	                              className="ml-1"
+	                              content="Alarm actions change alarm state. call_service triggers a Home Assistant service call."
+	                            />
+	                          </label>
+	                          <Select
+	                            size="sm"
+	                            value={a.type}
+	                            onChange={(e) => {
+	                              const type = e.target.value as ActionRow['type']
+	                              setActions((prev) =>
+	                                prev.map((row) => {
                                   if (row.id !== a.id) return row
                                   if (type === 'alarm_disarm') return { id: row.id, type }
                                   if (type === 'alarm_trigger') return { id: row.id, type }
@@ -796,64 +739,54 @@ export function RulesPage() {
                                     targetEntityIds: '',
                                     serviceDataJson: '{\n  "message": "Rule fired"\n}',
                                   }
-                                })
-                              )
-                            }}
-                          >
-                            <option value="alarm_trigger">Alarm trigger</option>
-                            <option value="alarm_disarm">Alarm disarm</option>
-                            <option value="alarm_arm">Alarm arm</option>
-                            <option value="ha_call_service">Home Assistant call_service</option>
-                          </select>
-                        </div>
+	                                })
+	                              )
+	                            }}
+	                          >
+	                            <option value="alarm_trigger">Alarm trigger</option>
+	                            <option value="alarm_disarm">Alarm disarm</option>
+	                            <option value="alarm_arm">Alarm arm</option>
+	                            <option value="ha_call_service">Home Assistant call_service</option>
+	                          </Select>
+	                        </div>
 
                         {a.type === 'alarm_arm' && (
-                          <div className="space-y-1">
-                            <label className="text-xs text-muted-foreground">
-                              Mode{' '}
-                              <Tooltip content="Which armed mode to switch the alarm into.">
-                                <span
-                                  tabIndex={0}
-                                  aria-label="Help"
-                                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                                >
-                                  ?
-                                </span>
-                              </Tooltip>
-                            </label>
-                            <select
-                              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                              value={a.mode}
-                              onChange={(e) => {
-                                const mode = e.target.value as AlarmArmMode
-                                setActions((prev) =>
-                                  prev.map((row) => (row.id === a.id ? { ...row, mode } : row)) as ActionRow[]
+	                          <div className="space-y-1">
+	                            <label className="text-xs text-muted-foreground">
+	                              Mode{' '}
+	                              <HelpTip
+	                                className="ml-1"
+	                                content="Which armed mode to switch the alarm into."
+	                              />
+	                            </label>
+	                            <Select
+	                              size="sm"
+	                              value={a.mode}
+	                              onChange={(e) => {
+	                                const mode = e.target.value as AlarmArmMode
+	                                setActions((prev) =>
+	                                  prev.map((row) => (row.id === a.id ? { ...row, mode } : row)) as ActionRow[]
                                 )
                               }}
                             >
-                              <option value="armed_away">Armed away</option>
-                              <option value="armed_home">Armed home</option>
-                              <option value="armed_night">Armed night</option>
-                              <option value="armed_vacation">Armed vacation</option>
-                            </select>
-                          </div>
-                        )}
+	                              <option value="armed_away">Armed away</option>
+	                              <option value="armed_home">Armed home</option>
+	                              <option value="armed_night">Armed night</option>
+	                              <option value="armed_vacation">Armed vacation</option>
+	                            </Select>
+	                          </div>
+	                        )}
 
                         {a.type === 'ha_call_service' && (
                           <>
-                            <div className="space-y-1">
-                              <label className="text-xs text-muted-foreground">
-                                Domain{' '}
-                                <Tooltip content="Service domain, e.g. notify, light, switch, siren.">
-                                  <span
-                                    tabIndex={0}
-                                    aria-label="Help"
-                                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                                  >
-                                    ?
-                                  </span>
-                                </Tooltip>
-                              </label>
+	                            <div className="space-y-1">
+	                              <label className="text-xs text-muted-foreground">
+	                                Domain{' '}
+	                                <HelpTip
+	                                  className="ml-1"
+	                                  content="Service domain, e.g. notify, light, switch, siren."
+	                                />
+	                              </label>
                               <Input
                                 value={a.domain}
                                 onChange={(e) =>
@@ -867,18 +800,13 @@ export function RulesPage() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-xs text-muted-foreground">
-                                Service{' '}
-                                <Tooltip content="Service name within the domain, e.g. turn_on, turn_off, mobile_app_foo.">
-                                  <span
-                                    tabIndex={0}
-                                    aria-label="Help"
-                                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                                  >
-                                    ?
-                                  </span>
-                                </Tooltip>
-                              </label>
+	                              <label className="text-xs text-muted-foreground">
+	                                Service{' '}
+	                                <HelpTip
+	                                  className="ml-1"
+	                                  content="Service name within the domain, e.g. turn_on, turn_off, mobile_app_foo."
+	                                />
+	                              </label>
                               <Input
                                 value={a.service}
                                 onChange={(e) =>
@@ -892,18 +820,13 @@ export function RulesPage() {
                               />
                             </div>
                             <div className="md:col-span-3 space-y-1">
-                              <label className="text-xs text-muted-foreground">
-                                Target entity IDs{' '}
-                                <Tooltip content="Comma-separated entity_ids to target (maps to target.entity_ids).">
-                                  <span
-                                    tabIndex={0}
-                                    aria-label="Help"
-                                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                                  >
-                                    ?
-                                  </span>
-                                </Tooltip>
-                              </label>
+	                              <label className="text-xs text-muted-foreground">
+	                                Target entity IDs{' '}
+	                                <HelpTip
+	                                  className="ml-1"
+	                                  content="Comma-separated entity_ids to target (maps to target.entity_ids)."
+	                                />
+	                              </label>
                               <Input
                                 value={a.targetEntityIds}
                                 onChange={(e) =>
@@ -917,18 +840,13 @@ export function RulesPage() {
                               />
                             </div>
                             <div className="md:col-span-3 space-y-1">
-                              <label className="text-xs text-muted-foreground">
-                                Service data (JSON){' '}
-                                <Tooltip content='JSON object passed as service_data. Example for notify: {"message":"..."}.'>
-                                  <span
-                                    tabIndex={0}
-                                    aria-label="Help"
-                                    className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                                  >
-                                    ?
-                                  </span>
-                                </Tooltip>
-                              </label>
+	                              <label className="text-xs text-muted-foreground">
+	                                Service data (JSON){' '}
+	                                <HelpTip
+	                                  className="ml-1"
+	                                  content='JSON object passed as service_data. Example for notify: {"message":"..."}.'
+	                                />
+	                              </label>
                               <textarea
                                 className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
                                 value={a.serviceDataJson}
@@ -960,19 +878,14 @@ export function RulesPage() {
             </Card>
           )}
 
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">
-              Definition (JSON){' '}
-              <Tooltip content="The stored rule definition. Builder mode keeps this read-only; Advanced mode lets you edit it directly.">
-                <span
-                  tabIndex={0}
-                  aria-label="Help"
-                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  ?
-                </span>
-              </Tooltip>
-            </label>
+	          <div className="space-y-1">
+	            <label className="text-xs text-muted-foreground">
+	              Definition (JSON){' '}
+	              <HelpTip
+	                className="ml-1"
+	                content="The stored rule definition. Builder mode keeps this read-only; Advanced mode lets you edit it directly."
+	              />
+	            </label>
             <textarea
               className="min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
               value={definitionText}
@@ -1032,11 +945,8 @@ export function RulesPage() {
                       </span>
                       <span>•</span>
                       <span>
-                        Actions:{' '}
-                        {Array.isArray((r.definition as any)?.then)
-                          ? ((r.definition as any).then as unknown[]).length
-                          : 0}
-                      </span>
+	                        Actions: {countThenActions(r.definition)}
+	                      </span>
                     </div>
 
                     <div className="mt-2">

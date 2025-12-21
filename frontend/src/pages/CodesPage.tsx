@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Info } from 'lucide-react'
 import { useAuthStore } from '@/stores'
 import { codesService, usersService } from '@/services'
 import { AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
@@ -12,7 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { DateTimeRangePicker } from '@/components/ui/date-time-range-picker'
-import { Tooltip } from '@/components/ui/tooltip'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { PageHeader } from '@/components/ui/page-header'
+import { HelpTip } from '@/components/ui/help-tip'
+import { Select } from '@/components/ui/select'
 
 type CreateCodeTypeOption = 'permanent' | 'temporary'
 
@@ -78,20 +80,6 @@ function formatDaysMask(mask: number): string {
   return names.length ? names.join(', ') : 'No days'
 }
 
-function HelpTip({ content }: { content: string }) {
-  return (
-    <Tooltip content={content} side="top">
-      <button
-        type="button"
-        className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-        aria-label="Help"
-      >
-        <Info className="h-4 w-4" />
-      </button>
-    </Tooltip>
-  )
-}
-
 export function CodesPage() {
   return <CodesPageContent />
 }
@@ -103,19 +91,14 @@ function CodesPageContent() {
 
   const [selectedUserId, setSelectedUserId] = useState<string>('')
 
-  useEffect(() => {
-    if (!selectedUserId && user) {
-      setSelectedUserId(user.id)
-    }
-  }, [selectedUserId, user])
-
   const usersQuery = useQuery({
     queryKey: queryKeys.users.all,
     queryFn: usersService.listUsers,
     enabled: isAdmin,
   })
 
-  const targetUserId = isAdmin ? selectedUserId : user?.id || ''
+  const selectedUserIdOrDefault = selectedUserId || user?.id || ''
+  const targetUserId = isAdmin ? selectedUserIdOrDefault : user?.id || ''
 
   const codesQueryKey = useMemo(() => ['codes', targetUserId], [targetUserId])
 
@@ -336,7 +319,7 @@ function CodesPageContent() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Codes</h1>
+      <PageHeader title="Codes" />
 
       {isAdmin && (
         <Card>
@@ -349,10 +332,9 @@ function CodesPageContent() {
                 <label className="text-sm font-medium" htmlFor="user">
                   User
                 </label>
-                <select
+                <Select
                   id="user"
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={selectedUserId}
+                  value={selectedUserIdOrDefault}
                   onChange={(e) => setSelectedUserId(e.target.value)}
                   disabled={usersQuery.isLoading || usersQuery.isError}
                 >
@@ -361,7 +343,7 @@ function CodesPageContent() {
                       {u.displayName} ({u.email})
                     </option>
                   ))}
-                </select>
+                </Select>
                 {usersQuery.isError && (
                   <p className="text-sm text-destructive">
                     Failed to load users: {getErrorMessage(usersQuery.error, 'Unknown error')}
@@ -395,16 +377,15 @@ function CodesPageContent() {
                     </label>
                     <HelpTip content="Temporary codes can have date/time and day-of-week restrictions. Permanent codes are always valid (unless deactivated)." />
                   </div>
-                  <select
+                  <Select
                     id="create-type"
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={createCodeType}
                     onChange={(e) => setCreateCodeType(e.target.value as CreateCodeTypeOption)}
                     disabled={createMutation.isPending}
                   >
                     <option value="permanent">Permanent</option>
                     <option value="temporary">Temporary</option>
-                  </select>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="create-label">
@@ -570,9 +551,9 @@ function CodesPageContent() {
               </div>
 
               {createError && (
-                <div className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                  {createError}
-                </div>
+                <Alert variant="error" layout="inline" className="mt-4">
+                  <AlertDescription>{createError}</AlertDescription>
+                </Alert>
               )}
 
               <div className="mt-4 flex justify-end">
@@ -820,9 +801,9 @@ function CodesPageContent() {
                   </div>
 
                   {editError && (
-                    <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                      {editError}
-                    </div>
+                    <Alert variant="error" layout="inline">
+                      <AlertDescription>{editError}</AlertDescription>
+                    </Alert>
                   )}
 
                   <div className="flex items-center justify-end gap-2">

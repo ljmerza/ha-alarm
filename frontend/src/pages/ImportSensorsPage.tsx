@@ -8,6 +8,8 @@ import type { HomeAssistantEntity } from '@/services/homeAssistant'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { PageHeader } from '@/components/ui/page-header'
 
 function defaultEntryPointFromDeviceClass(deviceClass?: string | null): boolean {
   if (!deviceClass) return false
@@ -174,21 +176,22 @@ export function ImportSensorsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Import Sensors</h1>
-          <p className="text-muted-foreground">
-            Add Home Assistant <code>sensor</code> and <code>binary_sensor</code> entities to your
-            alarm system.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link to={Routes.HOME}>
-            <Shield />
-            Back to Home
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Import Sensors"
+        description={
+          <>
+            Add Home Assistant <code>sensor</code> and <code>binary_sensor</code> entities to your alarm system.
+          </>
+        }
+        actions={
+          <Button asChild variant="outline">
+            <Link to={Routes.HOME}>
+              <Shield />
+              Back to Home
+            </Link>
+          </Button>
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -237,24 +240,26 @@ export function ImportSensorsPage() {
       </Card>
 
       {success && (
-        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-          <div className="flex items-center gap-2">
-            <Check className="h-4 w-4" />
-            Imported {success.count} sensor{success.count === 1 ? '' : 's'}.
-          </div>
-          {success.names.length > 0 && (
-            <div className="mt-1 text-xs text-green-800">
-              Examples: {success.names.join(', ')}
-              {success.count > success.names.length ? '…' : ''}
+        <Alert variant="success" layout="banner">
+          <AlertDescription>
+            <div className="flex items-center gap-2">
+              <Check className="h-4 w-4" />
+              Imported {success.count} sensor{success.count === 1 ? '' : 's'}.
             </div>
-          )}
-        </div>
+            {success.names.length > 0 && (
+              <div className="mt-1 text-xs opacity-90">
+                Examples: {success.names.join(', ')}
+                {success.count > success.names.length ? '…' : ''}
+              </div>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-          {error}
-        </div>
+        <Alert variant="error" layout="banner">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <Card>
@@ -419,4 +424,3 @@ export function ImportSensorsPage() {
 }
 
 export default ImportSensorsPage
-

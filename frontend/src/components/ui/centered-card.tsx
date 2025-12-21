@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 type CenteredCardLayout = 'screen' | 'section'
 
-export interface CenteredCardProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface CenteredCardProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   layout?: CenteredCardLayout
   title: React.ReactNode
   description?: React.ReactNode
@@ -47,4 +48,3 @@ export function CenteredCard({
     </div>
   )
 }
-

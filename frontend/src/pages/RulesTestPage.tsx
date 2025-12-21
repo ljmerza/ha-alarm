@@ -7,6 +7,10 @@ import type { Entity } from '@/types'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Link } from 'react-router-dom'
 import { Routes } from '@/lib/constants'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { PageHeader } from '@/components/ui/page-header'
+import { HelpTip } from '@/components/ui/help-tip'
+import { Select } from '@/components/ui/select'
 
 type Row = { id: string; entityId: string; state: string }
 
@@ -18,6 +22,23 @@ type SavedScenario = {
   name: string
   rows: Row[]
   assumeForSeconds: string
+}
+
+type SimulatedRule = {
+  id: number
+  name: string
+  kind: string
+  priority: number
+  matched?: boolean
+  trace?: unknown
+  actions?: unknown
+  for?: { status?: string; seconds?: number } | null
+}
+
+type SimulationResult = {
+  summary?: { evaluated: number; matched: number; wouldSchedule: number }
+  matchedRules?: SimulatedRule[]
+  nonMatchingRules?: SimulatedRule[]
 }
 
 const storageKey = 'alarm_rules_test_scenarios'
@@ -48,8 +69,8 @@ export function RulesTestPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<any>(null)
-  const [baselineResult, setBaselineResult] = useState<any>(null)
+  const [result, setResult] = useState<SimulationResult | null>(null)
+  const [baselineResult, setBaselineResult] = useState<SimulationResult | null>(null)
   const [scenarioName, setScenarioName] = useState('')
   const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([])
   const [selectedScenario, setSelectedScenario] = useState<string>('')
@@ -164,7 +185,7 @@ export function RulesTestPage() {
         return
       }
       const res = await rulesService.simulate({ entityStates, assumeForSeconds: assume })
-      setResult(res)
+      setResult(res as SimulationResult)
     } catch (err) {
       const anyErr = err as { message?: string }
       setError(anyErr.message || 'Simulation failed')
@@ -187,8 +208,8 @@ export function RulesTestPage() {
       }
       const base = await rulesService.simulate({ entityStates: {}, assumeForSeconds: assume })
       const changed = await rulesService.simulate({ entityStates: deltaEntityStates, assumeForSeconds: assume })
-      setBaselineResult(base)
-      setResult(changed)
+      setBaselineResult(base as SimulationResult)
+      setResult(changed as SimulationResult)
     } catch (err) {
       const anyErr = err as { message?: string }
       setError(anyErr.message || 'Simulation failed')
@@ -212,10 +233,10 @@ export function RulesTestPage() {
       forInfo?: unknown
     }
 
-    const normalize = (res: any) => {
+    const normalize = (res: SimulationResult) => {
       const out = new Map<number, Entry>()
-      const matchedRules = (res?.matchedRules || []) as any[]
-      const nonMatching = (res?.nonMatchingRules || []) as any[]
+      const matchedRules = Array.isArray(res.matchedRules) ? res.matchedRules : []
+      const nonMatching = Array.isArray(res.nonMatchingRules) ? res.nonMatchingRules : []
       for (const r of matchedRules) {
         const status: Status =
           r.matched === true ? 'matched' : r.for?.status === 'would_schedule' ? 'would_schedule' : 'not_matched'
@@ -297,18 +318,21 @@ export function RulesTestPage() {
   }
 
   const matchedRules = useMemo(() => {
-    const all = (result?.matchedRules || []) as any[]
+    const all = Array.isArray(result?.matchedRules) ? result.matchedRules : []
     return all.filter((r) => r.matched === true)
   }, [result])
 
   const scheduledForRules = useMemo(() => {
-    const all = (result?.matchedRules || []) as any[]
+    const all = Array.isArray(result?.matchedRules) ? result.matchedRules : []
     return all.filter((r) => r.matched !== true && r.for?.status === 'would_schedule')
   }, [result])
 
-  const nonMatchingRules = useMemo(() => (result?.nonMatchingRules || []) as any[], [result])
+  const nonMatchingRules = useMemo(
+    () => (Array.isArray(result?.nonMatchingRules) ? result.nonMatchingRules : []),
+    [result]
+  )
 
-  const filterRuleList = (list: any[]) => {
+  const filterRuleList = (list: SimulatedRule[]) => {
     const q = ruleSearch.trim().toLowerCase()
     const base = showOnlyMatched ? list.filter((r) => r.matched === true) : list
     if (!q) return base
@@ -317,32 +341,30 @@ export function RulesTestPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Test Rules</h1>
-          <p className="text-muted-foreground">
-            Simulate entity states and see which rules would match (no actions executed).
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link to={Routes.RULES}>Back to Rules</Link>
-          </Button>
-          <Tooltip content="Imports/updates the local Entity Registry from Home Assistant.">
-            <Button type="button" variant="outline" onClick={syncEntities} disabled={isLoading || isRunning}>
-              Sync Entities
+      <PageHeader
+        title="Test Rules"
+        description="Simulate entity states and see which rules would match (no actions executed)."
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link to={Routes.RULES}>Back to Rules</Link>
             </Button>
-          </Tooltip>
-          <Button type="button" variant="outline" onClick={refreshEntities} disabled={isLoading || isRunning}>
-            Refresh
-          </Button>
-        </div>
-      </div>
+            <Tooltip content="Imports/updates the local Entity Registry from Home Assistant.">
+              <Button type="button" variant="outline" onClick={syncEntities} disabled={isLoading || isRunning}>
+                Sync Entities
+              </Button>
+            </Tooltip>
+            <Button type="button" variant="outline" onClick={refreshEntities} disabled={isLoading || isRunning}>
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-          {error}
-        </div>
+        <Alert variant="error" layout="banner">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <Card>
@@ -350,13 +372,10 @@ export function RulesTestPage() {
           <CardTitle>Scenario</CardTitle>
           <CardDescription>
             Provide a set of entity state overrides for simulation.
-            <span className="ml-2">
-              <Tooltip content="This page is a dry-run. It never executes alarm actions or Home Assistant services.">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                  ?
-                </span>
-              </Tooltip>
-            </span>
+            <HelpTip
+              className="ml-2"
+              content="This page is a dry-run. It never executes alarm actions or Home Assistant services."
+            />
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -369,11 +388,10 @@ export function RulesTestPage() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground">
               Mode{' '}
-              <Tooltip content="Scenario overrides multiple entity states at once. Single Change compares baseline vs baseline + one state change.">
-                <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                  ?
-                </span>
-              </Tooltip>
+              <HelpTip
+                className="ml-1"
+                content="Scenario overrides multiple entity states at once. Single Change compares baseline vs baseline + one state change."
+              />
             </span>
             <Button
               type="button"
@@ -399,15 +417,14 @@ export function RulesTestPage() {
             <>
               {rows.map((row) => (
                 <div key={row.id} className="grid gap-2 md:grid-cols-12 items-end">
-                  <div className="md:col-span-7 space-y-1">
-                    <label className="text-xs text-muted-foreground">
-                      Entity ID{' '}
-                      <Tooltip content="Pick a Home Assistant entity_id. Use “Sync Entities” at the top if the list is empty.">
-                        <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                          ?
-                        </span>
-                      </Tooltip>
-                    </label>
+	                  <div className="md:col-span-7 space-y-1">
+	                    <label className="text-xs text-muted-foreground">
+	                      Entity ID{' '}
+	                      <HelpTip
+	                        className="ml-1"
+	                        content="Pick a Home Assistant entity_id. Use “Sync Entities” at the top if the list is empty."
+	                      />
+	                    </label>
                     <input
                       list="rules-test-entity-options"
                       className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -424,15 +441,14 @@ export function RulesTestPage() {
                       </div>
                     )}
                   </div>
-                  <div className="md:col-span-3 space-y-1">
-                    <label className="text-xs text-muted-foreground">
-                      State{' '}
-                      <Tooltip content="The simulated state string for this entity (e.g., on/off/open/closed).">
-                        <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                          ?
-                        </span>
-                      </Tooltip>
-                    </label>
+	                  <div className="md:col-span-3 space-y-1">
+	                    <label className="text-xs text-muted-foreground">
+	                      State{' '}
+	                      <HelpTip
+	                        className="ml-1"
+	                        content="The simulated state string for this entity (e.g., on/off/open/closed)."
+	                      />
+	                    </label>
                     <Input
                       value={row.state}
                       onChange={(e) => {
@@ -482,11 +498,10 @@ export function RulesTestPage() {
               <CardHeader>
                 <CardTitle className="text-base">
                   Single Change{' '}
-                  <Tooltip content="Runs baseline with no overrides (registry states), then runs again with one entity state override. The Results page shows differences in rule match status.">
-                    <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                      ?
-                    </span>
-                  </Tooltip>
+                  <HelpTip
+                    className="ml-1"
+                    content="Runs baseline with no overrides (registry states), then runs again with one entity state override. The Results page shows differences in rule match status."
+                  />
                 </CardTitle>
                 <CardDescription>
                   Runs a baseline simulation (current registry states), then applies one entity state change and shows what changes.
@@ -494,15 +509,14 @@ export function RulesTestPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid gap-2 md:grid-cols-12 items-end">
-                  <div className="md:col-span-8 space-y-1">
-                    <label className="text-xs text-muted-foreground">
-                      Entity ID{' '}
-                      <Tooltip content="Entity to change for the delta run. Baseline comes from the registry state.">
-                        <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                          ?
-                        </span>
-                      </Tooltip>
-                    </label>
+	                  <div className="md:col-span-8 space-y-1">
+	                    <label className="text-xs text-muted-foreground">
+	                      Entity ID{' '}
+	                      <HelpTip
+	                        className="ml-1"
+	                        content="Entity to change for the delta run. Baseline comes from the registry state."
+	                      />
+	                    </label>
                     <input
                       list="rules-test-entity-options"
                       className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -517,15 +531,14 @@ export function RulesTestPage() {
                       </div>
                     )}
                   </div>
-                  <div className="md:col-span-4 space-y-1">
-                    <label className="text-xs text-muted-foreground">
-                      New state{' '}
-                      <Tooltip content="The state to apply in the delta run (baseline + this change).">
-                        <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                          ?
-                        </span>
-                      </Tooltip>
-                    </label>
+	                  <div className="md:col-span-4 space-y-1">
+	                    <label className="text-xs text-muted-foreground">
+	                      New state{' '}
+	                      <HelpTip
+	                        className="ml-1"
+	                        content="The state to apply in the delta run (baseline + this change)."
+	                      />
+	                    </label>
                     <Input value={deltaState} onChange={(e) => setDeltaState(e.target.value)} disabled={isRunning} />
                     <div className="flex flex-wrap gap-1 pt-1">
                       {['on', 'off', 'open', 'closed', 'locked', 'unlocked'].map((v) => (
@@ -570,11 +583,10 @@ export function RulesTestPage() {
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">
                 Assume conditions true for (seconds){' '}
-                <Tooltip content="Used only for FOR rules. If set to >= the rule's FOR seconds, the simulator will treat it as satisfied.">
-                  <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                    ?
-                  </span>
-                </Tooltip>
+                <HelpTip
+                  className="ml-1"
+                  content="Used only for FOR rules. If set to >= the rule's FOR seconds, the simulator will treat it as satisfied."
+                />
               </label>
               <Input
                 value={assumeForSeconds}
@@ -634,15 +646,10 @@ export function RulesTestPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="space-y-1 md:col-span-2">
                   <label className="text-xs text-muted-foreground">
-                    Load{' '}
-                    <Tooltip content="Loads a saved scenario from your browser.">
-                      <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                        ?
-                      </span>
-                    </Tooltip>
+                    Load <HelpTip className="ml-1" content="Loads a saved scenario from your browser." />
                   </label>
-                  <select
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  <Select
+                    size="sm"
                     value={selectedScenario}
                     onChange={(e) => {
                       setSelectedScenario(e.target.value)
@@ -655,7 +662,7 @@ export function RulesTestPage() {
                         {s.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div className="flex items-end gap-2">
                   <Button type="button" variant="outline" onClick={deleteScenario} disabled={!selectedScenario || isRunning}>
@@ -668,15 +675,15 @@ export function RulesTestPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Results</CardTitle>
-          <CardDescription>
-            {result?.summary
-              ? `Evaluated ${result.summary.evaluated}, matched ${result.summary.matched}, would schedule ${result.summary.wouldSchedule}.`
-              : 'Run a simulation to see results.'}
-          </CardDescription>
-        </CardHeader>
+	      <Card>
+	        <CardHeader>
+	          <CardTitle>Results</CardTitle>
+	          <CardDescription>
+	            {result?.summary
+	              ? `Evaluated ${result.summary.evaluated}, matched ${result.summary.matched}, would schedule ${result.summary.wouldSchedule}.`
+	              : 'Run a simulation to see results.'}
+	          </CardDescription>
+	        </CardHeader>
         <CardContent className="space-y-3">
           {!result ? (
             <div className="text-sm text-muted-foreground">No results yet.</div>
@@ -723,39 +730,37 @@ export function RulesTestPage() {
                 </Card>
               )}
 
-              <div className="grid gap-3 md:grid-cols-3">
+	              <div className="grid gap-3 md:grid-cols-3">
                 <div className="space-y-1 md:col-span-2">
                   <label className="text-xs text-muted-foreground">Filter rules</label>
                   <Input value={ruleSearch} onChange={(e) => setRuleSearch(e.target.value)} placeholder="Search by rule name…" />
                 </div>
-                <div className="flex items-end gap-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={showOnlyMatched} onChange={(e) => setShowOnlyMatched(e.target.checked)} />
-                    <span>
-                      Only matched{' '}
-                      <Tooltip content="Filters the lists down to rules that matched in the current result set.">
-                        <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                          ?
-                        </span>
-                      </Tooltip>
-                    </span>
-                  </label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => navigator.clipboard?.writeText(JSON.stringify(result, null, 2))}
-                  >
-                    <span>
-                      Copy JSON{' '}
-                      <Tooltip content="Copies the full raw simulation response to your clipboard (useful for debugging).">
-                        <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-[11px] font-semibold text-muted-foreground">
-                          ?
-                        </span>
-                      </Tooltip>
-                    </span>
-                  </Button>
-                </div>
-              </div>
+	                <div className="flex items-end gap-2">
+	                  <label className="flex items-center gap-2 text-sm">
+	                    <input type="checkbox" checked={showOnlyMatched} onChange={(e) => setShowOnlyMatched(e.target.checked)} />
+	                    <span>
+	                      Only matched{' '}
+	                      <HelpTip
+	                        className="ml-1"
+	                        content="Filters the lists down to rules that matched in the current result set."
+	                      />
+	                    </span>
+	                  </label>
+	                  <Button
+	                    type="button"
+	                    variant="outline"
+	                    onClick={() => navigator.clipboard?.writeText(JSON.stringify(result, null, 2))}
+	                  >
+	                    <span>
+	                      Copy JSON{' '}
+	                      <HelpTip
+	                        className="ml-1"
+	                        content="Copies the full raw simulation response to your clipboard (useful for debugging)."
+	                      />
+	                    </span>
+	                  </Button>
+	                </div>
+	              </div>
 
               <Card>
                 <CardHeader>
@@ -766,7 +771,7 @@ export function RulesTestPage() {
                   {filterRuleList(matchedRules).length === 0 ? (
                     <div className="text-sm text-muted-foreground">None.</div>
                   ) : (
-                    filterRuleList(matchedRules).map((r: any) => (
+	                    filterRuleList(matchedRules).map((r) => (
                       <details key={r.id} className="rounded-md border p-3">
                         <summary className="cursor-pointer">
                           <span className="font-medium">{r.name}</span>{' '}
@@ -805,7 +810,7 @@ export function RulesTestPage() {
                   {filterRuleList(scheduledForRules).length === 0 ? (
                     <div className="text-sm text-muted-foreground">None.</div>
                   ) : (
-                    filterRuleList(scheduledForRules).map((r: any) => (
+	                    filterRuleList(scheduledForRules).map((r) => (
                       <details key={r.id} className="rounded-md border p-3">
                         <summary className="cursor-pointer">
                           <span className="font-medium">{r.name}</span>{' '}
@@ -841,7 +846,7 @@ export function RulesTestPage() {
                   </span>
                 </summary>
                 <div className="mt-2 space-y-2">
-                  {filterRuleList(nonMatchingRules).map((r: any) => (
+	                  {filterRuleList(nonMatchingRules).map((r) => (
                     <details key={r.id} className="rounded-md border p-3">
                       <summary className="cursor-pointer">
                         <span className="font-medium">{r.name}</span>{' '}

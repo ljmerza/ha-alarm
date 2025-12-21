@@ -8,10 +8,10 @@ import { Routes, AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
 import type { AlarmStateType } from '@/lib/constants'
 import { codesService } from '@/services'
 import { useAuthStore, useSetupStore } from '@/stores'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { CenteredCard } from '@/components/ui/centered-card'
 
 const ARMABLE_STATES: AlarmStateType[] = [
   AlarmState.ARMED_HOME,
@@ -80,109 +80,101 @@ export function SetupWizardPage() {
   }
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary">
-            <ShieldCheck className="h-6 w-6 text-primary-foreground" />
+    <CenteredCard
+      layout="section"
+      title="Create an Alarm Code"
+      description="You need at least one code to arm and disarm."
+      icon={<ShieldCheck className="h-6 w-6" />}
+    >
+      {user?.role !== UserRole.ADMIN ? (
+        <div className="space-y-4">
+          <Alert variant="warning" layout="banner">
+            <AlertTitle>Admin action required</AlertTitle>
+            <AlertDescription>
+              An admin must create your alarm code before you can use the system.
+            </AlertDescription>
+          </Alert>
+          <Button type="button" className="w-full" variant="secondary" onClick={() => logout()}>
+            Log out
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="label" className="text-sm font-medium">
+              Label (optional)
+            </label>
+            <Input id="label" type="text" placeholder="Admin" {...register('label')} disabled={isSubmitting} />
+            {errors.label && <p className="text-sm text-destructive">{errors.label.message}</p>}
           </div>
-          <CardTitle className="text-2xl">Create an Alarm Code</CardTitle>
-          <CardDescription>
-            You need at least one code to arm and disarm.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {user?.role !== UserRole.ADMIN ? (
-            <div className="space-y-4">
-              <div className="rounded-md border border-input bg-muted/30 p-3 text-sm">
-                <p className="font-medium">Admin action required</p>
-                <p className="text-muted-foreground">
-                  An admin must create your alarm code before you can use the system.
-                </p>
-              </div>
-              <Button type="button" className="w-full" variant="secondary" onClick={() => logout()}>
-                Log out
-              </Button>
+
+          <div className="space-y-2">
+            <label htmlFor="code" className="text-sm font-medium">
+              Code
+            </label>
+            <Input
+              id="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="4–8 digits"
+              {...register('code')}
+              disabled={isSubmitting}
+            />
+            {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Allowed Arm States</div>
+            <div className="grid gap-2">
+              {ARMABLE_STATES.map((state) => (
+                <label key={state} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={allowedStates.includes(state)}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setAllowedStates((cur) => {
+                        if (checked) return Array.from(new Set([...cur, state]))
+                        return cur.filter((s) => s !== state)
+                      })
+                    }}
+                    disabled={isSubmitting}
+                  />
+                  {AlarmStateLabels[state]}
+                </label>
+              ))}
             </div>
-          ) : (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="label" className="text-sm font-medium">
-                  Label (optional)
-                </label>
-                <Input id="label" type="text" placeholder="Admin" {...register('label')} disabled={isSubmitting} />
-                {errors.label && <p className="text-sm text-destructive">{errors.label.message}</p>}
-              </div>
+          </div>
 
-              <div className="space-y-2">
-                <label htmlFor="code" className="text-sm font-medium">
-                  Code
-                </label>
-                <Input
-                  id="code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="4–8 digits"
-                  {...register('code')}
-                  disabled={isSubmitting}
-                />
-                {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
-              </div>
+          <div className="space-y-2">
+            <label htmlFor="reauthPassword" className="text-sm font-medium">
+              Re-authenticate (password)
+            </label>
+            <Input
+              id="reauthPassword"
+              type="password"
+              placeholder="Your account password"
+              {...register('reauthPassword')}
+              disabled={isSubmitting}
+            />
+            {errors.reauthPassword && (
+              <p className="text-sm text-destructive">{errors.reauthPassword.message}</p>
+            )}
+          </div>
 
-              <div className="space-y-2">
-                <div className="text-sm font-medium">Allowed Arm States</div>
-                <div className="grid gap-2">
-                  {ARMABLE_STATES.map((state) => (
-                    <label key={state} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={allowedStates.includes(state)}
-                        onChange={(e) => {
-                          const checked = e.target.checked
-                          setAllowedStates((cur) => {
-                            if (checked) return Array.from(new Set([...cur, state]))
-                            return cur.filter((s) => s !== state)
-                          })
-                        }}
-                        disabled={isSubmitting}
-                      />
-                      {AlarmStateLabels[state]}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="reauthPassword" className="text-sm font-medium">
-                  Re-authenticate (password)
-                </label>
-                <Input
-                  id="reauthPassword"
-                  type="password"
-                  placeholder="Your account password"
-                  {...register('reauthPassword')}
-                  disabled={isSubmitting}
-                />
-                {errors.reauthPassword && (
-                  <p className="text-sm text-destructive">{errors.reauthPassword.message}</p>
-                )}
-              </div>
-
-              {error && (
-                <Alert variant="error" layout="inline">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving…' : 'Save Code'}
-              </Button>
-            </form>
+          {error && (
+            <Alert variant="error" layout="inline">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
-        </CardContent>
-      </Card>
-    </div>
+
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Saving…' : 'Save Code'}
+          </Button>
+        </form>
+      )}
+    </CenteredCard>
   )
 }
 

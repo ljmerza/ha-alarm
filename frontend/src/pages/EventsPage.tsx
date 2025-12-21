@@ -1,19 +1,11 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/ui/page-header'
+import { PlaceholderCard } from '@/components/ui/placeholder-card'
 
 export function EventsPage() {
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Events</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Event History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            Event history will be implemented in Phase 7.
-          </p>
-        </CardContent>
-      </Card>
+      <PageHeader title="Events" />
+      <PlaceholderCard title="Event History" message="Event history will be implemented in Phase 7." />
     </div>
   )
 }

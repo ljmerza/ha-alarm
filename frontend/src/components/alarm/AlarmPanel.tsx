@@ -3,6 +3,7 @@ import { useAlarm } from '@/hooks'
 import { type AlarmStateType } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlarmStatus } from './AlarmStatus'
 import { ArmButtons } from './ArmButtons'
 import { Keypad } from './Keypad'
@@ -182,9 +183,9 @@ export function AlarmPanel({ className }: AlarmPanelProps) {
 
             {/* Error Display */}
             {error && (
-              <div className="w-full mt-4 p-3 bg-destructive/10 text-destructive rounded-lg text-sm text-center">
-                {error}
-              </div>
+              <Alert variant="error" layout="inline" className="mt-4 text-center">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
           </div>
         </CardContent>
@@ -217,9 +218,9 @@ export function AlarmPanel({ className }: AlarmPanelProps) {
                 submitLabel={mode === 'arming' ? 'Arm' : 'Disarm'}
               />
               {error && (
-                <div className="mt-4 p-3 bg-destructive/10 text-destructive rounded-lg text-sm text-center">
-                  {error}
-                </div>
+                <Alert variant="error" layout="inline" className="mt-4 text-center">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
             </CardContent>
           </Card>

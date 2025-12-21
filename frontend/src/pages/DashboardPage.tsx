@@ -1,14 +1,12 @@
 import { AlarmPanel } from '@/components/alarm'
 import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
 import { SystemStatusCard } from '@/components/dashboard/SystemStatusCard'
+import { PageHeader } from '@/components/ui/page-header'
 
 export function DashboardPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Home</h1>
-        <p className="text-muted-foreground">Arm/disarm and review recent activity.</p>
-      </div>
+      <PageHeader title="Home" description="Arm/disarm and review recent activity." />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
