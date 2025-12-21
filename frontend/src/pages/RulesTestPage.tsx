@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { entitiesService, rulesService } from '@/services'
 import type { Entity } from '@/types'
+import { queryKeys } from '@/types'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Link } from 'react-router-dom'
 import { Routes } from '@/lib/constants'
@@ -61,13 +63,19 @@ function saveSavedScenarios(scenarios: SavedScenario[]) {
 }
 
 export function RulesTestPage() {
-  const [entities, setEntities] = useState<Entity[]>([])
+  const queryClient = useQueryClient()
+
+  const entitiesQuery = useQuery({
+    queryKey: queryKeys.entities.all,
+    queryFn: entitiesService.list,
+  })
+
+  const entities: Entity[] = entitiesQuery.data ?? []
   const [rows, setRows] = useState<Row[]>([{ id: uniqueId(), entityId: '', state: 'on' }])
   const [mode, setMode] = useState<'scenario' | 'delta'>('scenario')
   const [deltaEntityId, setDeltaEntityId] = useState('')
   const [deltaState, setDeltaState] = useState('on')
   const [assumeForSeconds, setAssumeForSeconds] = useState<string>('')
-  const [isLoading, setIsLoading] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<SimulationResult | null>(null)
@@ -89,53 +97,26 @@ export function RulesTestPage() {
     setSavedScenarios(loadSavedScenarios())
   }, [])
 
-  const refreshEntities = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const list = await entitiesService.list()
-      setEntities(list)
-    } catch (err) {
-      setError(getErrorMessage(err) || 'Failed to load entities')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   useEffect(() => {
-    let mounted = true
-    setIsLoading(true)
-    setError(null)
-    entitiesService
-      .list()
-      .then((list) => {
-        if (!mounted) return
-        setEntities(list)
-      })
-      .catch((err) => {
-        if (!mounted) return
-        setError(getErrorMessage(err) || 'Failed to load entities')
-      })
-      .finally(() => {
-        if (!mounted) return
-        setIsLoading(false)
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
+    const message = getErrorMessage(entitiesQuery.error)
+    if (!message) return
+    setError((prev) => prev ?? message)
+  }, [entitiesQuery.error])
+
+  const syncEntitiesMutation = useMutation({
+    mutationFn: entitiesService.sync,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+    },
+    onError: (err) => setError(getErrorMessage(err) || 'Failed to sync entities'),
+  })
 
   const syncEntities = async () => {
     setError(null)
-    setIsLoading(true)
-    try {
-      await entitiesService.sync()
-      await refreshEntities()
-    } catch (err) {
-      setError(getErrorMessage(err) || 'Failed to sync entities')
-      setIsLoading(false)
-    }
+    await syncEntitiesMutation.mutateAsync()
   }
+
+  const isLoading = entitiesQuery.isLoading || entitiesQuery.isFetching || syncEntitiesMutation.isPending
 
   const entityStates = useMemo(() => {
     const out: Record<string, string> = {}
@@ -350,7 +331,15 @@ export function RulesTestPage() {
                 Sync Entities
               </Button>
             </Tooltip>
-            <Button type="button" variant="outline" onClick={refreshEntities} disabled={isLoading || isRunning}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setError(null)
+                void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+              }}
+              disabled={isLoading || isRunning}
+            >
               Refresh
             </Button>
           </>

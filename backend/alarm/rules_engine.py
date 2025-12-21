@@ -7,11 +7,12 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Entity, Rule, RuleRuntimeState
+from .models import RuleRuntimeState
 from .rules.action_executor import execute_actions
 from .rules.audit_log import log_rule_action
 from .rules.conditions import eval_condition, eval_condition_explain, extract_for
-from .rules.runtime_state import cooldown_active, ensure_runtime
+from .rules.repositories import RuleEngineRepositories, default_rule_engine_repositories
+from .rules.runtime_state import cooldown_active
 
 
 class RuleEngineError(RuntimeError):
@@ -37,23 +38,18 @@ class RuleRunResult:
 
 
 @transaction.atomic
-def run_rules(*, now=None, actor_user=None) -> RuleRunResult:
+def run_rules(*, now=None, actor_user=None, repos: RuleEngineRepositories | None = None) -> RuleRunResult:
+    repos = repos or default_rule_engine_repositories()
     now = now or timezone.now()
-    rules = list(Rule.objects.filter(enabled=True).order_by("-priority", "id"))
-    entities = Entity.objects.all()
-    entity_state = {e.entity_id: e.last_state for e in entities}
+    rules = repos.list_enabled_rules()
+    entity_state = repos.entity_state_map()
 
     fired = 0
     scheduled = 0
     skipped_cooldown = 0
     errors = 0
 
-    due_runtimes = list(
-        RuleRuntimeState.objects.select_for_update()
-        .filter(scheduled_for__isnull=False, scheduled_for__lte=now, rule__enabled=True)
-        .select_related("rule")
-        .order_by("scheduled_for", "id")
-    )
+    due_runtimes = repos.due_runtimes(now)
 
     for runtime in due_runtimes:
         rule = runtime.rule
@@ -111,7 +107,7 @@ def run_rules(*, now=None, actor_user=None) -> RuleRunResult:
         seconds, child = extract_for(when_node)
 
         if seconds:
-            runtime = ensure_runtime(rule)
+            runtime = repos.ensure_runtime(rule)
             matched = eval_condition(child, entity_state=entity_state)
             if not matched:
                 if runtime.became_true_at or runtime.scheduled_for:
@@ -131,7 +127,7 @@ def run_rules(*, now=None, actor_user=None) -> RuleRunResult:
         if not matched:
             continue
 
-        runtime = ensure_runtime(rule)
+        runtime = repos.ensure_runtime(rule)
         if cooldown_active(rule=rule, runtime=runtime, now=now):
             skipped_cooldown += 1
             continue
@@ -177,18 +173,20 @@ def simulate_rules(
     entity_states: dict[str, str],
     now=None,
     assume_for_seconds: int | None = None,
+    repos: RuleEngineRepositories | None = None,
 ) -> dict[str, Any]:
     """
     Dry-run: evaluates rules against provided entity_states and returns what would happen.
     No actions are executed.
     """
     now = now or timezone.now()
+    repos = repos or default_rule_engine_repositories()
     assume_for_seconds = assume_for_seconds if isinstance(assume_for_seconds, int) else None
     if assume_for_seconds is not None and assume_for_seconds < 0:
         assume_for_seconds = 0
 
-    rules = list(Rule.objects.filter(enabled=True).order_by("-priority", "id"))
-    db_entities = {e.entity_id: e.last_state for e in Entity.objects.all()}
+    rules = repos.list_enabled_rules()
+    db_entities = repos.entity_state_map()
     merged_state: dict[str, str | None] = {**db_entities, **entity_states}
 
     matched: list[dict[str, Any]] = []

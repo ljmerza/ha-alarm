@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -39,11 +39,16 @@ export function SystemStatusCard() {
 
   const alarmState = alarmStateQuery.data ?? null
   const isLoading = alarmStateQuery.isFetching || sensorsQuery.isFetching || recentEventsQuery.isFetching
-  const [ha, setHa] = useState<{
-    configured: boolean
-    reachable: boolean
-    error?: string | null
-  } | null>(null)
+
+  const haQuery = useQuery({
+    queryKey: queryKeys.homeAssistant.status,
+    queryFn: homeAssistantService.getStatus,
+    enabled: isAuthenticated,
+  })
+
+  const ha =
+    haQuery.data ??
+    (haQuery.isError ? { configured: true, reachable: false, error: 'Failed to check status' } : null)
 
   const statusLabel = useMemo(() => {
     switch (ws.status) {
@@ -60,23 +65,6 @@ export function SystemStatusCard() {
   }, [ws.status])
 
   const StatusIcon = ws.status === 'connected' ? Wifi : WifiOff
-
-  useEffect(() => {
-    let isMounted = true
-    homeAssistantService
-      .getStatus()
-      .then((status) => {
-        if (!isMounted) return
-        setHa(status)
-      })
-      .catch(() => {
-        if (!isMounted) return
-        setHa({ configured: true, reachable: false, error: 'Failed to check status' })
-      })
-    return () => {
-      isMounted = false
-    }
-  }, [])
 
   return (
     <Card>
@@ -102,12 +90,7 @@ export function SystemStatusCard() {
               void queryClient.invalidateQueries({ queryKey: queryKeys.alarm.state })
               void queryClient.invalidateQueries({ queryKey: queryKeys.sensors.all })
               void queryClient.invalidateQueries({ queryKey: queryKeys.events.recent })
-              homeAssistantService
-                .getStatus()
-                .then((status) => setHa(status))
-                .catch(() =>
-                  setHa({ configured: true, reachable: false, error: 'Failed to check status' })
-                )
+              void queryClient.invalidateQueries({ queryKey: queryKeys.homeAssistant.status })
             }}
           >
             <RefreshCw />

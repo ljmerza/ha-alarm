@@ -18,40 +18,20 @@ def custom_exception_handler(exc, context):
         return response
 
     # Local imports to avoid import-time side effects.
-    from accounts.use_cases import auth as auth_uc
-    from accounts.use_cases import codes as codes_uc
-    from accounts.use_cases import onboarding as onboarding_uc
     from alarm import home_assistant
     from alarm.state_machine.errors import TransitionError
-    from alarm.use_cases import alarm_actions
-    from alarm.use_cases import rules as rules_uc
+    from config import domain_exceptions as domain
 
-    if isinstance(exc, auth_uc.InvalidCredentials):
-        return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
-    if isinstance(exc, auth_uc.InvalidRefreshToken):
-        return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
-
-    if isinstance(exc, onboarding_uc.OnboardingAlreadyCompleted):
-        return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
-
-    if isinstance(exc, codes_uc.ReauthRequired):
+    if isinstance(exc, domain.ValidationError):
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    if isinstance(exc, codes_uc.ReauthFailed):
+    if isinstance(exc, domain.UnauthorizedError):
+        return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+    if isinstance(exc, domain.ForbiddenError):
         return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
-    if isinstance(exc, codes_uc.Forbidden):
-        return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
-    if isinstance(exc, codes_uc.NotFound):
+    if isinstance(exc, domain.NotFoundError):
         return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
-
-    if isinstance(exc, alarm_actions.InvalidTargetState):
-        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    if isinstance(exc, alarm_actions.CodeRequired):
-        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    if isinstance(exc, alarm_actions.InvalidCode):
-        return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
-
-    if isinstance(exc, rules_uc.RuleSimulateInputError):
-        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    if isinstance(exc, domain.ConflictError):
+        return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
 
     if isinstance(exc, home_assistant.HomeAssistantNotConfigured):
         return Response({"detail": str(exc) or "Home Assistant is not configured."}, status=status.HTTP_400_BAD_REQUEST)
@@ -65,4 +45,3 @@ def custom_exception_handler(exc, context):
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     return None
-

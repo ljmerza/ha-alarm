@@ -2,21 +2,22 @@ from __future__ import annotations
 
 from alarm import services
 from alarm.models import AlarmState
+from config.domain_exceptions import UnauthorizedError, ValidationError
 
 
 class AlarmActionError(RuntimeError):
     pass
 
 
-class InvalidTargetState(AlarmActionError):
+class InvalidTargetState(ValidationError):
     pass
 
 
-class CodeRequired(AlarmActionError):
+class CodeRequired(ValidationError):
     pass
 
 
-class InvalidCode(AlarmActionError):
+class InvalidCode(UnauthorizedError):
     pass
 
 
@@ -80,4 +81,3 @@ def disarm_alarm(*, user, raw_code):
     snapshot = services.disarm(user=user, code=code_obj)
     services.record_code_used(user=user, code=code_obj, action="disarm")
     return snapshot
-

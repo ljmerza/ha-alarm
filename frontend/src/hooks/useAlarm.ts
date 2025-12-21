@@ -73,8 +73,8 @@ export function useAlarm() {
 
   const alarmState: AlarmStateSnapshot | null = alarmStateQuery.data ?? null
   const settings: AlarmSettingsProfile | null = settingsQuery.data ?? null
-  const sensors: Sensor[] = sensorsQuery.data ?? []
-  const recentEvents: AlarmEvent[] = recentEventsQuery.data ?? []
+  const sensors: Sensor[] = useMemo(() => sensorsQuery.data ?? [], [sensorsQuery.data])
+  const recentEvents: AlarmEvent[] = useMemo(() => recentEventsQuery.data ?? [], [recentEventsQuery.data])
   const countdown: CountdownPayload | null = countdownQuery.data ?? null
 
   const isLoading =
@@ -227,4 +227,3 @@ export function useAlarmState() {
 }
 
 export default useAlarm
-

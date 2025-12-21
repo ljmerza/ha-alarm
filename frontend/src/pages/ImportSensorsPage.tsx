@@ -39,7 +39,7 @@ export function ImportSensorsPage() {
     queryFn: sensorsService.getSensors,
     enabled: isAuthenticated,
   })
-  const sensors = sensorsQuery.data ?? []
+  const sensors = useMemo(() => sensorsQuery.data ?? [], [sensorsQuery.data])
 
   const [query, setQuery] = useState('')
   const [entities, setEntities] = useState<HomeAssistantEntity[]>([])

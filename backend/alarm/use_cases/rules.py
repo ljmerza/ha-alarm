@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from alarm import rules_engine
 from alarm.models import Rule
+from config.domain_exceptions import ValidationError
 
 
 @dataclass(frozen=True)
@@ -12,7 +13,7 @@ class RuleSimulateInput:
     assume_for_seconds: int | None
 
 
-class RuleSimulateInputError(ValueError):
+class RuleSimulateInputError(ValidationError):
     pass
 
 
@@ -59,4 +60,3 @@ def simulate_rules(*, input_data: RuleSimulateInput):
         entity_states=input_data.entity_states,
         assume_for_seconds=input_data.assume_for_seconds,
     )
-

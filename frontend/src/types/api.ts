@@ -58,6 +58,12 @@ export const queryKeys = {
     settingsProfiles: ['alarm', 'settings', 'profiles'] as const,
     countdown: ['alarm', 'countdown'] as const,
   },
+  entities: {
+    all: ['entities'] as const,
+  },
+  rules: {
+    all: ['rules'] as const,
+  },
   sensors: {
     all: ['sensors'] as const,
     detail: (id: number) => ['sensors', id] as const,
@@ -77,4 +83,7 @@ export const queryKeys = {
     detail: (id: number) => ['users', id] as const,
   },
   health: ['health'] as const,
+  homeAssistant: {
+    status: ['homeAssistant', 'status'] as const,
+  },
 }

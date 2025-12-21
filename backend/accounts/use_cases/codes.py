@@ -4,25 +4,22 @@ from django.db.models import QuerySet
 
 from accounts.models import User, UserCode
 from accounts.policies import is_admin
+from config.domain_exceptions import ForbiddenError, NotFoundError, ValidationError
 
 
-class CodesError(RuntimeError):
+class Forbidden(ForbiddenError):
     pass
 
 
-class Forbidden(CodesError):
+class NotFound(NotFoundError):
     pass
 
 
-class NotFound(CodesError):
+class ReauthRequired(ValidationError):
     pass
 
 
-class ReauthRequired(CodesError):
-    pass
-
-
-class ReauthFailed(CodesError):
+class ReauthFailed(ForbiddenError):
     pass
 
 
@@ -90,4 +87,3 @@ def get_code_for_admin_update(*, actor_user: User, code_id: int) -> UserCode:
     if not code:
         raise NotFound("Not found.")
     return code
-

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip } from '@/components/ui/tooltip'
 import { entitiesService, rulesService } from '@/services'
 import type { Entity, Rule, RuleKind } from '@/types'
+import { queryKeys } from '@/types'
 import { Link } from 'react-router-dom'
 import { Routes } from '@/lib/constants'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -116,12 +118,23 @@ function buildDefinitionFromBuilder(
 }
 
 export function RulesPage() {
-  const [rules, setRules] = useState<Rule[]>([])
-  const [entities, setEntities] = useState<Entity[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
+  const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  const rulesQuery = useQuery({
+    queryKey: queryKeys.rules.all,
+    queryFn: () => rulesService.list(),
+  })
+
+  const entitiesQuery = useQuery({
+    queryKey: queryKeys.entities.all,
+    queryFn: entitiesService.list,
+  })
+
+  const rules: Rule[] = rulesQuery.data ?? []
+  const entities: Entity[] = entitiesQuery.data ?? []
+  const isLoading = rulesQuery.isLoading || entitiesQuery.isLoading
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [name, setName] = useState('')
@@ -149,6 +162,12 @@ export function RulesPage() {
     return Array.from(new Set(fromConditions)).sort()
   }, [conditions])
 
+  useEffect(() => {
+    const message = getErrorMessage(rulesQuery.error) || getErrorMessage(entitiesQuery.error)
+    if (!message) return
+    setError((prev) => prev ?? message)
+  }, [rulesQuery.error, entitiesQuery.error])
+
   const resetForm = () => {
     setEditingId(null)
     setName('')
@@ -166,52 +185,77 @@ export function RulesPage() {
     setDefinitionText('{\n  "when": {},\n  "then": []\n}')
   }
 
-  const load = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const [rulesList, entitiesList] = await Promise.all([rulesService.list(), entitiesService.list()])
-      setRules(rulesList)
-      setEntities(entitiesList)
-    } catch (err) {
-      setError(getErrorMessage(err) || 'Failed to load rules')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const syncEntitiesMutation = useMutation({
+    mutationFn: entitiesService.sync,
+    onSuccess: async (result) => {
+      setNotice(`Synced entities (imported ${result.imported}, updated ${result.updated}).`)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+    },
+    onError: (err) => setError(getErrorMessage(err) || 'Failed to sync entities'),
+  })
 
-  useEffect(() => {
-    void load()
-  }, [])
+  const runRulesMutation = useMutation({
+    mutationFn: rulesService.run,
+    onSuccess: async (result) => {
+      setNotice(
+        `Rules run: evaluated ${result.evaluated}, fired ${result.fired}, scheduled ${result.scheduled}, cooldown ${result.skippedCooldown}, errors ${result.errors}.`
+      )
+      await queryClient.invalidateQueries({ queryKey: queryKeys.rules.all })
+    },
+    onError: (err) => setError(getErrorMessage(err) || 'Failed to run rules'),
+  })
+
+  const saveRuleMutation = useMutation({
+    mutationFn: async (vars: {
+      id: number | null
+      payload: {
+        name: string
+        kind: Rule['kind']
+        enabled: boolean
+        priority: number
+        schemaVersion: number
+        definition: Record<string, unknown>
+        cooldownSeconds?: number | null
+        entityIds?: string[]
+      }
+    }) => {
+      if (vars.id == null) return rulesService.create(vars.payload)
+      return rulesService.update(vars.id, vars.payload)
+    },
+    onSuccess: async (_rule, vars) => {
+      setNotice(vars.id == null ? 'Rule created.' : 'Rule updated.')
+      await queryClient.invalidateQueries({ queryKey: queryKeys.rules.all })
+      resetForm()
+    },
+    onError: (err) => setError(getErrorMessage(err) || 'Failed to save rule'),
+  })
+
+  const deleteRuleMutation = useMutation({
+    mutationFn: (id: number) => rulesService.delete(id),
+    onSuccess: async () => {
+      setNotice('Rule deleted.')
+      await queryClient.invalidateQueries({ queryKey: queryKeys.rules.all })
+      resetForm()
+    },
+    onError: (err) => setError(getErrorMessage(err) || 'Failed to delete rule'),
+  })
+
+  const isSaving =
+    syncEntitiesMutation.isPending ||
+    runRulesMutation.isPending ||
+    saveRuleMutation.isPending ||
+    deleteRuleMutation.isPending
 
   const syncEntities = async () => {
     setNotice(null)
     setError(null)
-    try {
-      const result = await entitiesService.sync()
-      setNotice(`Synced entities (imported ${result.imported}, updated ${result.updated}).`)
-      const entitiesList = await entitiesService.list()
-      setEntities(entitiesList)
-    } catch (err) {
-      setError(getErrorMessage(err) || 'Failed to sync entities')
-    }
+    await syncEntitiesMutation.mutateAsync()
   }
 
   const runRulesNow = async () => {
     setNotice(null)
     setError(null)
-    setIsSaving(true)
-    try {
-      const result = await rulesService.run()
-      setNotice(
-        `Rules run: evaluated ${result.evaluated}, fired ${result.fired}, scheduled ${result.scheduled}, cooldown ${result.skippedCooldown}, errors ${result.errors}.`
-      )
-      await load()
-    } catch (err) {
-      setError(getErrorMessage(err) || 'Failed to run rules')
-    } finally {
-      setIsSaving(false)
-    }
+    await runRulesMutation.mutateAsync()
   }
 
   useEffect(() => {
@@ -320,7 +364,6 @@ export function RulesPage() {
   }
 
   const submit = async () => {
-    setIsSaving(true)
     setError(null)
     setNotice(null)
     try {
@@ -362,38 +405,17 @@ export function RulesPage() {
         entityIds,
       }
 
-      if (editingId == null) {
-        await rulesService.create(payload)
-        setNotice('Rule created.')
-      } else {
-        await rulesService.update(editingId, payload)
-        setNotice('Rule updated.')
-      }
-
-      await load()
-      resetForm()
+      await saveRuleMutation.mutateAsync({ id: editingId, payload })
     } catch (err) {
       setError(getErrorMessage(err) || 'Failed to save rule')
-    } finally {
-      setIsSaving(false)
     }
   }
 
   const remove = async () => {
     if (editingId == null) return
-    setIsSaving(true)
     setError(null)
     setNotice(null)
-    try {
-      await rulesService.delete(editingId)
-      setNotice('Rule deleted.')
-      await load()
-      resetForm()
-    } catch (err) {
-      setError(getErrorMessage(err) || 'Failed to delete rule')
-    } finally {
-      setIsSaving(false)
-    }
+    await deleteRuleMutation.mutateAsync(editingId)
   }
 
   return (
@@ -416,7 +438,15 @@ export function RulesPage() {
             <Button asChild type="button" variant="outline">
               <Link to={Routes.RULES_TEST}>Test Rules</Link>
             </Button>
-            <Button type="button" variant="outline" onClick={load} disabled={isSaving}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.rules.all })
+                void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+              }}
+              disabled={isSaving}
+            >
               Refresh
             </Button>
           </>

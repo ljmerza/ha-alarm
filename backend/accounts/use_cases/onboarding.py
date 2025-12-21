@@ -9,13 +9,14 @@ from accounts.models import Role, User, UserRoleAssignment
 from alarm import services as alarm_services
 from alarm.models import AlarmSystem
 from alarm.use_cases.settings_profile import ensure_active_settings_profile
+from config.domain_exceptions import ConflictError
 
 
 class OnboardingError(RuntimeError):
     pass
 
 
-class OnboardingAlreadyCompleted(OnboardingError):
+class OnboardingAlreadyCompleted(ConflictError):
     pass
 
 
@@ -71,4 +72,3 @@ def complete_onboarding(*, email: str, password: str, home_name: str, timezone_n
         alarm_services.get_current_snapshot(process_timers=False)
 
     return OnboardingResult(user=user, alarm_system=alarm_system)
-

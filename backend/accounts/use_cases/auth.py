@@ -7,17 +7,14 @@ from django.contrib.auth.models import update_last_login
 from rest_framework.authtoken.models import Token
 
 from accounts.models import User
+from config.domain_exceptions import UnauthorizedError
 
 
-class AuthError(RuntimeError):
+class InvalidCredentials(UnauthorizedError):
     pass
 
 
-class InvalidCredentials(AuthError):
-    pass
-
-
-class InvalidRefreshToken(AuthError):
+class InvalidRefreshToken(UnauthorizedError):
     pass
 
 
@@ -45,4 +42,3 @@ def refresh_token(*, refresh: str) -> Token:
 
 def logout(*, user: User) -> None:
     Token.objects.filter(user=user).delete()
-
