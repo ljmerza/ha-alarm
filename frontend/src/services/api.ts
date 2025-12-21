@@ -1,4 +1,4 @@
-import { API_BASE_URL, StorageKeys } from '@/lib/constants'
+import { API_BASE_URL } from '@/lib/constants'
 import type { ApiError, PaginatedResponse } from '@/types'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -34,9 +34,21 @@ function transformKeysDeep(value: unknown, transformKey: (key: string) => string
   return out
 }
 
+function getCookieValue(cookieName: string): string | null {
+  if (typeof document === 'undefined') return null
+  const cookies = document.cookie ? document.cookie.split('; ') : []
+  for (const cookie of cookies) {
+    const [name, ...rest] = cookie.split('=')
+    if (name === cookieName) {
+      return decodeURIComponent(rest.join('='))
+    }
+  }
+  return null
+}
+
 class ApiClient {
   private baseUrl: string
-  private refreshPromise: Promise<void> | null = null
+  private csrfPromise: Promise<void> | null = null
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl
@@ -52,54 +64,26 @@ class ApiClient {
     return new URL(endpoint, window.location.origin).toString()
   }
 
-  private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem(StorageKeys.AUTH_TOKEN)
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
+  private async ensureCsrfCookie(): Promise<void> {
+    if (this.csrfPromise) return this.csrfPromise
 
-  private async refreshTokens(): Promise<void> {
-    if (this.refreshPromise) {
-      return this.refreshPromise
-    }
-
-    const refreshToken = localStorage.getItem(StorageKeys.REFRESH_TOKEN)
-    if (!refreshToken) {
-      throw new Error('No refresh token available')
-    }
-
-    this.refreshPromise = (async () => {
-      const response = await fetch(this.resolveUrl('/api/auth/token/refresh/'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh: refreshToken }),
+    this.csrfPromise = fetch(this.resolveUrl('/api/auth/csrf/'), {
+      method: 'GET',
+      credentials: 'include',
+    })
+      .then(() => undefined)
+      .finally(() => {
+        this.csrfPromise = null
       })
 
-      // If refresh fails, clear tokens so callers can treat as logged out
-      if (!response.ok) {
-        localStorage.removeItem(StorageKeys.AUTH_TOKEN)
-        localStorage.removeItem(StorageKeys.REFRESH_TOKEN)
-        throw new Error('Token refresh failed')
-      }
+    return this.csrfPromise
+  }
 
-      const json = await response.json().catch(() => ({}))
-      const transformed = transformKeysDeep(json, toCamelCaseKey) as Record<string, unknown>
-      const accessToken = typeof transformed.accessToken === 'string' ? transformed.accessToken : null
-      const nextRefreshToken =
-        typeof transformed.refreshToken === 'string' ? transformed.refreshToken : refreshToken
-
-      if (!accessToken) {
-        localStorage.removeItem(StorageKeys.AUTH_TOKEN)
-        localStorage.removeItem(StorageKeys.REFRESH_TOKEN)
-        throw new Error('Token refresh failed')
-      }
-
-      localStorage.setItem(StorageKeys.AUTH_TOKEN, accessToken)
-      localStorage.setItem(StorageKeys.REFRESH_TOKEN, nextRefreshToken)
-    })().finally(() => {
-      this.refreshPromise = null
-    })
-
-    return this.refreshPromise
+  private async getCsrfToken(): Promise<string | null> {
+    const existing = getCookieValue('csrftoken')
+    if (existing) return existing
+    await this.ensureCsrfCookie()
+    return getCookieValue('csrftoken')
   }
 
   private async request<T>(
@@ -125,13 +109,18 @@ class ApiClient {
     }
 
     const doFetch = async (): Promise<Response> => {
+      const csrfHeader =
+        method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE'
+          ? { 'X-CSRFToken': (await this.getCsrfToken()) || '' }
+          : {}
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
+        ...csrfHeader,
       }
       return fetch(buildUrl().toString(), {
         method,
         headers,
+        credentials: 'include',
         body:
           method === 'GET' || method === 'DELETE'
             ? undefined
@@ -141,26 +130,7 @@ class ApiClient {
       })
     }
 
-    let response = await doFetch()
-
-    const isUnauthorized = response.status === 401
-    const canAttemptRefresh =
-      isUnauthorized &&
-      endpoint !== '/api/auth/login/' &&
-      endpoint !== '/api/auth/logout/' &&
-      endpoint !== '/api/auth/token/refresh/' &&
-      !!localStorage.getItem(StorageKeys.REFRESH_TOKEN)
-
-    if (canAttemptRefresh) {
-      try {
-        await this.refreshTokens()
-        response = await doFetch()
-      } catch {
-        // fall through and let handleResponse surface the original/next error
-      }
-    }
-
-    return this.handleResponse<T>(response)
+    return this.handleResponse<T>(await doFetch())
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {

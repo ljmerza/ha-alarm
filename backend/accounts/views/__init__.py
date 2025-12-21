@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .auth import LoginView, LogoutView, RefreshTokenView
+from .auth import CsrfView, LoginView, LogoutView, RefreshTokenView
 from .codes import CodeDetailView, CodesView
 from .onboarding import OnboardingView
 from .setup_status import SetupStatusView
@@ -10,6 +10,7 @@ __all__ = [
     "CodeDetailView",
     "CodesView",
     "CurrentUserView",
+    "CsrfView",
     "LoginView",
     "LogoutView",
     "OnboardingView",
@@ -17,4 +18,3 @@ __all__ = [
     "SetupStatusView",
     "UsersView",
 ]
-

@@ -11,6 +11,13 @@ class AuthApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="auth@example.com", password="pass")
 
+    def test_csrf_sets_cookie(self):
+        url = reverse("auth-csrf")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("csrfToken", response.data)
+        self.assertIn("csrftoken", response.cookies)
+
     def test_login_returns_token_payload(self):
         url = reverse("auth-login")
         response = self.client.post(url, data={"email": "auth@example.com", "password": "pass"}, format="json")
@@ -19,6 +26,12 @@ class AuthApiTests(APITestCase):
         self.assertIn("refreshToken", response.data)
         self.assertEqual(response.data["accessToken"], response.data["refreshToken"])
         self.assertEqual(response.data["user"]["email"], "auth@example.com")
+        self.assertIn("sessionid", response.cookies)
+
+        me_url = reverse("users-me")
+        me_response = self.client.get(me_url)
+        self.assertEqual(me_response.status_code, 200)
+        self.assertEqual(me_response.data["email"], "auth@example.com")
 
     def test_login_rejects_invalid_credentials(self):
         url = reverse("auth-login")
@@ -46,10 +59,15 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.data["refreshToken"], token.key)
 
     def test_logout_deletes_token(self):
-        token = Token.objects.create(user=self.user)
-        self.client.force_authenticate(self.user, token=token)
+        login_url = reverse("auth-login")
+        self.client.post(login_url, data={"email": "auth@example.com", "password": "pass"}, format="json")
+        self.assertTrue(Token.objects.filter(user=self.user).exists())
+
         url = reverse("auth-logout")
         response = self.client.post(url, data={}, format="json")
         self.assertEqual(response.status_code, 204)
-        self.assertFalse(Token.objects.filter(key=token.key).exists())
+        self.assertFalse(Token.objects.filter(user=self.user).exists())
 
+        me_url = reverse("users-me")
+        me_response = self.client.get(me_url)
+        self.assertEqual(me_response.status_code, 401)

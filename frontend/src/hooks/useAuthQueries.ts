@@ -1,26 +1,11 @@
-import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { LoginCredentials, LoginResponse, TokenPair, User } from '@/types'
+import type { LoginCredentials, LoginResponse, User } from '@/types'
 import type { ApiError } from '@/types'
 import { authService } from '@/services'
-import { StorageKeys } from '@/lib/constants'
 import { queryKeys } from '@/types'
 
 type AuthSession = {
   isAuthenticated: boolean
-}
-
-function getStoredAccessToken(): string | null {
-  return localStorage.getItem(StorageKeys.AUTH_TOKEN)
-}
-
-function getStoredRefreshToken(): string | null {
-  return localStorage.getItem(StorageKeys.REFRESH_TOKEN)
-}
-
-function clearTokens() {
-  localStorage.removeItem(StorageKeys.AUTH_TOKEN)
-  localStorage.removeItem(StorageKeys.REFRESH_TOKEN)
 }
 
 function isApiUnauthorized(error: unknown): boolean {
@@ -32,39 +17,34 @@ function isApiUnauthorized(error: unknown): boolean {
 export function useAuthSessionQuery() {
   return useQuery<AuthSession>({
     queryKey: queryKeys.auth.session,
-    queryFn: async () => ({ isAuthenticated: !!getStoredAccessToken() }),
-    initialData: { isAuthenticated: !!getStoredAccessToken() },
+    queryFn: async () => ({ isAuthenticated: false }),
+    initialData: { isAuthenticated: false },
     enabled: false,
   })
 }
 
 export function useCurrentUserQuery() {
   const queryClient = useQueryClient()
-  const session = useAuthSessionQuery()
-  const hasToken = !!getStoredAccessToken()
 
-  const query = useQuery<User, ApiError>({
+  const query = useQuery<User | null, ApiError>({
     queryKey: queryKeys.auth.currentUser,
     queryFn: async () => {
-      const user = await authService.getCurrentUser()
-      queryClient.setQueryData(queryKeys.auth.session, { isAuthenticated: true })
-      return user
+      try {
+        const user = await authService.getCurrentUser()
+        queryClient.setQueryData(queryKeys.auth.session, { isAuthenticated: true })
+        return user
+      } catch (error) {
+        if (isApiUnauthorized(error)) {
+          queryClient.setQueryData(queryKeys.auth.session, { isAuthenticated: false })
+          return null
+        }
+        throw error
+      }
     },
-    enabled: session.data.isAuthenticated && hasToken,
-    retry: (failureCount, error) => {
-      if (isApiUnauthorized(error)) return false
-      return failureCount < 1
-    },
+    enabled: true,
+    retry: (failureCount) => failureCount < 1,
     staleTime: 60_000,
   })
-
-  useEffect(() => {
-    if (!query.error) return
-    if (!isApiUnauthorized(query.error)) return
-    clearTokens()
-    queryClient.setQueryData(queryKeys.auth.session, { isAuthenticated: false })
-    queryClient.removeQueries({ queryKey: queryKeys.auth.currentUser })
-  }, [query.error, queryClient])
 
   return query
 }
@@ -88,7 +68,6 @@ export function useLoginMutation() {
         // Keep session false until 2FA verify completes.
         return
       }
-      clearTokens()
       queryClient.setQueryData(queryKeys.auth.session, { isAuthenticated: false })
       queryClient.removeQueries({ queryKey: queryKeys.auth.currentUser })
     },
@@ -116,31 +95,9 @@ export function useLogoutMutation() {
       await authService.logout()
     },
     onSettled: async () => {
-      clearTokens()
       queryClient.setQueryData(queryKeys.auth.session, { isAuthenticated: false })
-      queryClient.removeQueries({ queryKey: queryKeys.auth.currentUser })
+      queryClient.setQueryData(queryKeys.auth.currentUser, null)
       await queryClient.invalidateQueries()
-    },
-  })
-}
-
-export function useRefreshTokenMutation() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (): Promise<TokenPair> => {
-      const refreshToken = getStoredRefreshToken()
-      if (!refreshToken) {
-        throw new Error('No refresh token available')
-      }
-      return authService.refreshToken()
-    },
-    onSuccess: () => {
-      queryClient.setQueryData(queryKeys.auth.session, { isAuthenticated: !!getStoredAccessToken() })
-    },
-    onError: () => {
-      clearTokens()
-      queryClient.setQueryData(queryKeys.auth.session, { isAuthenticated: false })
-      queryClient.removeQueries({ queryKey: queryKeys.auth.currentUser })
     },
   })
 }

@@ -37,5 +37,5 @@ class QueryStringTokenAuthMiddleware(BaseMiddleware):
             else:
                 logger.info("WS auth: authenticated user_id=%s", getattr(user, "id", None))
         else:
-            logger.info("WS auth: no token provided")
+            logger.debug("WS auth: no token provided")
         return await super().__call__(scope, receive, send)

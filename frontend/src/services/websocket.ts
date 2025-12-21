@@ -1,4 +1,4 @@
-import { WS_BASE_URL, StorageKeys } from '@/lib/constants'
+import { WS_BASE_URL } from '@/lib/constants'
 import type { AlarmWebSocketMessage, WebSocketStatus } from '@/types'
 
 type MessageHandler = (message: AlarmWebSocketMessage) => void
@@ -23,10 +23,6 @@ class WebSocketManager {
     this.url = wsUrl || `ws://${window.location.host}`
   }
 
-  private getAuthToken(): string | null {
-    return localStorage.getItem(StorageKeys.AUTH_TOKEN)
-  }
-
   private setStatus(status: WebSocketStatus): void {
     this.status = status
     this.statusHandlers.forEach((handler) => handler(status))
@@ -40,10 +36,7 @@ class WebSocketManager {
       return
     }
 
-    const token = this.getAuthToken()
-    const wsUrl = token
-      ? `${this.url}/ws/alarm/?token=${encodeURIComponent(token)}`
-      : `${this.url}/ws/alarm/`
+    const wsUrl = `${this.url}/ws/alarm/`
 
     this.setStatus('connecting')
 

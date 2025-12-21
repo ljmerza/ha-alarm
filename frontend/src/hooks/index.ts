@@ -24,6 +24,5 @@ export {
   useLoginMutation,
   useLogoutMutation,
   useVerify2FAMutation,
-  useRefreshTokenMutation,
 } from './useAuthQueries'
 export { useCountdown, useAlarmCountdown, default as countdown } from './useCountdown'
