@@ -11,6 +11,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/ui/page-header'
 import { HelpTip } from '@/components/ui/help-tip'
 import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 
 const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'trigger', label: 'Trigger' },
@@ -491,17 +494,18 @@ export function RulesPage() {
 
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-	              <label className="flex items-center gap-2 text-sm" htmlFor="rule-enabled">
-                <input
-                  id="rule-enabled"
-                  type="checkbox"
+              <div className="flex items-center gap-2">
+                <Switch
                   checked={enabled}
-                  onChange={(e) => setEnabled(e.target.checked)}
+                  onCheckedChange={setEnabled}
+                  aria-labelledby="rule-enabled-label"
                 />
-	                Enabled
-	              </label>
-	              <HelpTip content="Disabled rules are saved but ignored by the engine." />
-	            </div>
+                <span id="rule-enabled-label" className="text-sm">
+                  Enabled
+                </span>
+              </div>
+              <HelpTip content="Disabled rules are saved but ignored by the engine." />
+            </div>
             <Button type="button" variant="outline" onClick={() => setAdvanced((v) => !v)}>
               {advanced ? 'Use Builder' : 'Advanced JSON'}
             </Button>
@@ -526,8 +530,8 @@ export function RulesPage() {
 	                  content="Used to quickly find which rules should re-evaluate when an entity changes. In Builder mode this is derived from your conditions; in Advanced mode you can edit it."
 	                />
 	              </label>
-              <textarea
-                className="min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              <Textarea
+                className="min-h-[88px]"
                 value={entityIdsText}
                 onChange={(e) => setEntityIdsText(e.target.value)}
                 placeholder="One per line (or comma-separated)"
@@ -600,9 +604,8 @@ export function RulesPage() {
 	                            content="A Home Assistant entity_id like binary_sensor.front_door. Use “Sync Entities” to get autocomplete."
 	                          />
 	                        </label>
-                        <input
+                        <Input
                           list="entity-id-options"
-                          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                           value={row.entityId}
                           onChange={(e) => {
                             const value = e.target.value
@@ -632,9 +635,8 @@ export function RulesPage() {
                         />
                       </div>
                       <div className="md:col-span-2 flex items-center gap-2">
-                        <input
+                        <Checkbox
                           id={`cond-negate-${row.id}`}
-                          type="checkbox"
                           checked={row.negate}
                           onChange={(e) => {
                             const next = e.target.checked
@@ -847,8 +849,8 @@ export function RulesPage() {
 	                                  content='JSON object passed as service_data. Example for notify: {"message":"..."}.'
 	                                />
 	                              </label>
-                              <textarea
-                                className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                              <Textarea
+                                className="min-h-[120px] font-mono text-xs"
                                 value={a.serviceDataJson}
                                 onChange={(e) =>
                                   setActions((prev) =>
@@ -886,8 +888,8 @@ export function RulesPage() {
 	                content="The stored rule definition. Builder mode keeps this read-only; Advanced mode lets you edit it directly."
 	              />
 	            </label>
-            <textarea
-              className="min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+            <Textarea
+              className="min-h-[220px] font-mono text-xs"
               value={definitionText}
               onChange={(e) => setDefinitionText(e.target.value)}
               spellCheck={false}

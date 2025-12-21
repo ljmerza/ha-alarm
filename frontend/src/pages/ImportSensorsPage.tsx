@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/ui/page-header'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 
 function defaultEntryPointFromDeviceClass(deviceClass?: string | null): boolean {
   if (!deviceClass) return false
@@ -293,8 +295,7 @@ export function ImportSensorsPage() {
                   <div key={entity.entityId} className="rounded-md border p-3">
                     <div className="flex items-start justify-between gap-3">
                       <label className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           className="mt-1"
                           checked={isChecked}
                           disabled={already}
@@ -344,9 +345,9 @@ export function ImportSensorsPage() {
                           />
                         </div>
 
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <label className="text-xs text-muted-foreground">Entry sensor</label>
+	                        <div className="space-y-1">
+	                          <div className="flex items-center justify-between gap-2">
+	                            <label className="text-xs text-muted-foreground">Entry sensor</label>
                             <button
                               type="button"
                               className="text-xs text-muted-foreground underline"
@@ -360,25 +361,27 @@ export function ImportSensorsPage() {
                             >
                               Help
                             </button>
-                          </div>
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={!!entry}
-                              onChange={(e) =>
-                                setEntryOverrides((prev) => ({
-                                  ...prev,
-                                  [entity.entityId]: e.target.checked,
-                                }))
-                              }
-                            />
-                            {suggestedEntry ? 'On (suggested)' : 'Off'}
-                          </label>
-                          {isHelpOpen && (
-                            <div id={helpId} className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                              <div>{entrySensorHelp}</div>
-                              <div className="mt-1">{entrySensorSuggestedHelp}</div>
-                            </div>
+	                          </div>
+	                          <div className="flex items-center gap-2">
+	                            <Switch
+	                              checked={!!entry}
+	                              onCheckedChange={(checked) =>
+	                                setEntryOverrides((prev) => ({
+	                                  ...prev,
+	                                  [entity.entityId]: checked,
+	                                }))
+	                              }
+	                              aria-labelledby={`entry-sensor-label-${toDomId(entity.entityId)}`}
+	                            />
+	                            <span id={`entry-sensor-label-${toDomId(entity.entityId)}`} className="text-sm">
+	                              {suggestedEntry ? 'On (suggested)' : 'Off'}
+	                            </span>
+	                          </div>
+	                          {isHelpOpen && (
+	                            <div id={helpId} className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+	                              <div>{entrySensorHelp}</div>
+	                              <div className="mt-1">{entrySensorSuggestedHelp}</div>
+	                            </div>
                           )}
                         </div>
                       </div>

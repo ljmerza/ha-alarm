@@ -15,6 +15,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/ui/page-header'
 import { HelpTip } from '@/components/ui/help-tip'
 import { Select } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 
 type CreateCodeTypeOption = 'permanent' | 'temporary'
 
@@ -447,26 +449,24 @@ function CodesPageContent() {
                       <HelpTip content="Restrict which weekdays this code can be used. Mon=0 … Sun=6 internally." />
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {DAY_LABELS.map((label, idx) => (
-                        <label key={label} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={createDays.has(idx)}
-                            onChange={(e) => {
-                              const checked = e.target.checked
-                              setCreateDays((cur) => {
-                                const next = new Set(cur)
+	                      {DAY_LABELS.map((label, idx) => (
+	                        <label key={label} className="flex items-center gap-2 text-sm">
+	                          <Checkbox
+	                            checked={createDays.has(idx)}
+	                            onChange={(e) => {
+	                              const checked = e.target.checked
+	                              setCreateDays((cur) => {
+	                                const next = new Set(cur)
                                 if (checked) next.add(idx)
                                 else next.delete(idx)
                                 return next
                               })
-                            }}
-                            disabled={createMutation.isPending}
-                          />
-                          {label}
-                        </label>
-                      ))}
+	                            }}
+	                            disabled={createMutation.isPending}
+	                          />
+	                          {label}
+	                        </label>
+	                      ))}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {formatDaysMask(daysSetToMask(createDays))}
@@ -514,22 +514,20 @@ function CodesPageContent() {
                   <HelpTip content="Controls which armed states this code is allowed to arm into. (Disarm is still allowed if the code is otherwise valid.)" />
                 </div>
                 <div className="grid gap-2 md:grid-cols-2">
-                  {ARMABLE_STATES.map((state) => (
-                    <label key={state} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={createAllowedStates.includes(state)}
-                        onChange={(e) =>
-                          setCreateAllowedStates((cur) =>
-                            toggleAllowedState(cur, state, e.target.checked)
+	                  {ARMABLE_STATES.map((state) => (
+	                    <label key={state} className="flex items-center gap-2 text-sm">
+	                      <Checkbox
+	                        checked={createAllowedStates.includes(state)}
+	                        onChange={(e) =>
+	                          setCreateAllowedStates((cur) =>
+	                            toggleAllowedState(cur, state, e.target.checked)
                           )
                         }
-                        disabled={createMutation.isPending}
-                      />
-                      {AlarmStateLabels[state]}
-                    </label>
-                  ))}
+	                        disabled={createMutation.isPending}
+	                      />
+	                      {AlarmStateLabels[state]}
+	                    </label>
+	                  ))}
                 </div>
               </div>
 
@@ -694,21 +692,19 @@ function CodesPageContent() {
                         <div className="flex flex-wrap gap-2">
                           {DAY_LABELS.map((label, idx) => (
                             <label key={label} className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={editDays.has(idx)}
-                                onChange={(e) => {
-                                  const checked = e.target.checked
-                                  setEditDays((cur) => {
-                                    const next = new Set(cur)
+                      <Checkbox
+                        checked={editDays.has(idx)}
+                        onChange={(e) => {
+                          const checked = e.target.checked
+                          setEditDays((cur) => {
+                            const next = new Set(cur)
                                     if (checked) next.add(idx)
                                     else next.delete(idx)
                                     return next
                                   })
                                 }}
-                                disabled={updateMutation.isPending}
-                              />
+                        disabled={updateMutation.isPending}
+                      />
                               {label}
                             </label>
                           ))}
@@ -753,35 +749,34 @@ function CodesPageContent() {
                       <HelpTip content="Controls which armed states this code is allowed to arm into." />
                     </div>
                     <div className="grid gap-2 md:grid-cols-2">
-                      {ARMABLE_STATES.map((state) => (
-                        <label key={state} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={editAllowedStates.includes(state)}
-                            onChange={(e) =>
-                              setEditAllowedStates((cur) =>
-                                toggleAllowedState(cur, state, e.target.checked)
+	                  {ARMABLE_STATES.map((state) => (
+	                    <label key={state} className="flex items-center gap-2 text-sm">
+	                      <Checkbox
+	                        checked={editAllowedStates.includes(state)}
+	                        onChange={(e) =>
+	                          setEditAllowedStates((cur) =>
+	                            toggleAllowedState(cur, state, e.target.checked)
                               )
                             }
-                            disabled={updateMutation.isPending}
-                          />
-                          {AlarmStateLabels[state]}
-                        </label>
-                      ))}
+	                        disabled={updateMutation.isPending}
+	                      />
+	                      {AlarmStateLabels[state]}
+	                    </label>
+	                  ))}
                     </div>
                   </div>
 
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
+                  <div className="flex items-center gap-2">
+                    <Switch
                       checked={editIsActive}
-                      onChange={(e) => setEditIsActive(e.target.checked)}
+                      onCheckedChange={setEditIsActive}
                       disabled={updateMutation.isPending}
+                      aria-labelledby={`code-active-label-${editingCodeId ?? 'new'}`}
                     />
-                    Active
-                  </label>
+                    <span id={`code-active-label-${editingCodeId ?? 'new'}`} className="text-sm">
+                      Active
+                    </span>
+                  </div>
 
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">

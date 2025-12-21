@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/ui/page-header'
 import { HelpTip } from '@/components/ui/help-tip'
 import { Select } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 
 type Row = { id: string; entityId: string; state: string }
 
@@ -425,13 +426,12 @@ export function RulesTestPage() {
 	                        content="Pick a Home Assistant entity_id. Use “Sync Entities” at the top if the list is empty."
 	                      />
 	                    </label>
-                    <input
-                      list="rules-test-entity-options"
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={row.entityId}
-                      onChange={(e) => {
-                        setRowEntityId(row.id, e.target.value)
-                      }}
+	                    <Input
+	                      list="rules-test-entity-options"
+	                      value={row.entityId}
+	                      onChange={(e) => {
+	                        setRowEntityId(row.id, e.target.value)
+	                      }}
                       placeholder="binary_sensor.front_door"
                       disabled={isLoading || isRunning}
                     />
@@ -517,12 +517,11 @@ export function RulesTestPage() {
 	                        content="Entity to change for the delta run. Baseline comes from the registry state."
 	                      />
 	                    </label>
-                    <input
-                      list="rules-test-entity-options"
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={deltaEntityId}
-                      onChange={(e) => setDeltaEntityId(e.target.value)}
-                      placeholder="binary_sensor.front_door"
+	                    <Input
+	                      list="rules-test-entity-options"
+	                      value={deltaEntityId}
+	                      onChange={(e) => setDeltaEntityId(e.target.value)}
+	                      placeholder="binary_sensor.front_door"
                       disabled={isLoading || isRunning}
                     />
                     {deltaEntityId.trim() && entitiesById.get(deltaEntityId.trim())?.lastState != null && (
@@ -736,21 +735,25 @@ export function RulesTestPage() {
                   <Input value={ruleSearch} onChange={(e) => setRuleSearch(e.target.value)} placeholder="Search by rule name…" />
                 </div>
 	                <div className="flex items-end gap-2">
-	                  <label className="flex items-center gap-2 text-sm">
-	                    <input type="checkbox" checked={showOnlyMatched} onChange={(e) => setShowOnlyMatched(e.target.checked)} />
-	                    <span>
-	                      Only matched{' '}
-	                      <HelpTip
-	                        className="ml-1"
-	                        content="Filters the lists down to rules that matched in the current result set."
-	                      />
-	                    </span>
-	                  </label>
-	                  <Button
-	                    type="button"
-	                    variant="outline"
-	                    onClick={() => navigator.clipboard?.writeText(JSON.stringify(result, null, 2))}
-	                  >
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={showOnlyMatched}
+                      onCheckedChange={setShowOnlyMatched}
+                      aria-labelledby="show-only-matched-label"
+                    />
+                    <span id="show-only-matched-label" className="text-sm">
+                      Only matched{' '}
+                      <HelpTip
+                        className="ml-1"
+                        content="Filters the lists down to rules that matched in the current result set."
+                      />
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigator.clipboard?.writeText(JSON.stringify(result, null, 2))}
+                  >
 	                    <span>
 	                      Copy JSON{' '}
 	                      <HelpTip

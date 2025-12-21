@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { CenteredCard } from '@/components/ui/centered-card'
+import { Checkbox } from '@/components/ui/checkbox'
 
 const ARMABLE_STATES: AlarmStateType[] = [
   AlarmState.ARMED_HOME,
@@ -128,9 +129,7 @@ export function SetupWizardPage() {
             <div className="grid gap-2">
               {ARMABLE_STATES.map((state) => (
                 <label key={state} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
+                  <Checkbox
                     checked={allowedStates.includes(state)}
                     onChange={(e) => {
                       const checked = e.target.checked
