@@ -10,6 +10,8 @@ class WebSocketManager {
   private reconnectAttempts = 0
   private maxReconnectAttempts = 10
   private reconnectDelay = 1000
+  private shouldReconnect = true
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null
   private messageHandlers: Set<MessageHandler> = new Set()
   private statusHandlers: Set<StatusHandler> = new Set()
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null
@@ -31,7 +33,10 @@ class WebSocketManager {
   }
 
   connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    this.shouldReconnect = true
+
+    const readyState = this.ws?.readyState
+    if (readyState === WebSocket.OPEN || readyState === WebSocket.CONNECTING) {
       return
     }
 
@@ -67,7 +72,9 @@ class WebSocketManager {
       this.ws.onclose = () => {
         this.setStatus('disconnected')
         this.stopHeartbeat()
-        this.scheduleReconnect()
+        if (this.shouldReconnect) {
+          this.scheduleReconnect()
+        }
       }
     } catch (error) {
       console.error('Failed to create WebSocket:', error)
@@ -77,7 +84,12 @@ class WebSocketManager {
   }
 
   disconnect(): void {
+    this.shouldReconnect = false
     this.reconnectAttempts = this.maxReconnectAttempts // Prevent reconnection
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout)
+      this.reconnectTimeout = null
+    }
     this.stopHeartbeat()
     if (this.ws) {
       this.ws.close()
@@ -87,6 +99,7 @@ class WebSocketManager {
   }
 
   private scheduleReconnect(): void {
+    if (!this.shouldReconnect) return
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('Max reconnection attempts reached')
       return
@@ -99,7 +112,8 @@ class WebSocketManager {
 
     this.reconnectAttempts++
 
-    setTimeout(() => {
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null
       if (this.status !== 'connected') {
         this.connect()
       }

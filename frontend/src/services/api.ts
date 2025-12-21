@@ -41,6 +41,16 @@ class ApiClient {
     this.baseUrl = baseUrl
   }
 
+  private resolveUrl(endpoint: string): string {
+    if (this.baseUrl) {
+      return `${this.baseUrl}${endpoint}`
+    }
+    if (typeof window === 'undefined') {
+      return endpoint
+    }
+    return new URL(endpoint, window.location.origin).toString()
+  }
+
   private getAuthHeaders(): HeadersInit {
     const token = localStorage.getItem(StorageKeys.AUTH_TOKEN)
     return token ? { Authorization: `Bearer ${token}` } : {}
@@ -93,7 +103,7 @@ class ApiClient {
   }
 
   async get<T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
-    const url = new URL(`${this.baseUrl}${endpoint}`)
+    const url = new URL(this.resolveUrl(endpoint))
     if (params) {
       const snakeParams = transformKeysDeep(params, toSnakeCaseKey) as Record<
         string,
@@ -118,7 +128,7 @@ class ApiClient {
   }
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.resolveUrl(endpoint), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -131,7 +141,7 @@ class ApiClient {
   }
 
   async put<T>(endpoint: string, data: unknown): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.resolveUrl(endpoint), {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -144,7 +154,7 @@ class ApiClient {
   }
 
   async patch<T>(endpoint: string, data: unknown): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.resolveUrl(endpoint), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -157,7 +167,7 @@ class ApiClient {
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await fetch(this.resolveUrl(endpoint), {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

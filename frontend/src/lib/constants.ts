@@ -1,24 +1,5 @@
 // API Configuration
-const resolveApiBaseUrl = (): string => {
-  const configured = import.meta.env.VITE_API_URL
-  if (configured) {
-    return configured
-  }
-  if (typeof window === 'undefined') {
-    return ''
-  }
-  const { protocol, hostname, port } = window.location
-  if (!port) {
-    return ''
-  }
-  const numericPort = Number(port)
-  if (!Number.isFinite(numericPort) || numericPort <= 1) {
-    return ''
-  }
-  return `${protocol}//${hostname}:${numericPort - 1}`
-}
-
-export const API_BASE_URL = resolveApiBaseUrl()
+export const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 export const WS_BASE_URL = import.meta.env.VITE_WS_URL || API_BASE_URL
 
 // Alarm States

@@ -8,9 +8,9 @@ from rest_framework.views import APIView
 
 from . import services
 from . import home_assistant
-from . import rules_engine
 from .use_cases import alarm_actions
 from .use_cases.entity_sync import sync_entities_from_home_assistant
+from .use_cases import rules as rules_uc
 from .use_cases.sensor_context import sensor_detail_serializer_context, sensor_list_serializer_context
 from .gateways.home_assistant import default_home_assistant_gateway
 from .models import AlarmEvent, AlarmSettingsProfile, AlarmState, Entity, Rule, Sensor
@@ -94,14 +94,10 @@ class EntitySyncView(APIView):
 
 class RulesView(APIView):
     def get(self, request):
-        kind = request.query_params.get("kind")
-        enabled = request.query_params.get("enabled")
-        queryset = Rule.objects.all()
-        if kind:
-            queryset = queryset.filter(kind=kind)
-        if enabled in {"true", "false"}:
-            queryset = queryset.filter(enabled=(enabled == "true"))
-        queryset = queryset.order_by("-priority", "id")
+        queryset = rules_uc.list_rules(
+            kind=request.query_params.get("kind"),
+            enabled=request.query_params.get("enabled"),
+        )
         return Response(RuleSerializer(queryset, many=True).data, status=status.HTTP_200_OK)
 
     def post(self, request):
@@ -130,40 +126,17 @@ class RuleDetailView(APIView):
 
 class RuleRunView(APIView):
     def post(self, request):
-        result = rules_engine.run_rules(actor_user=request.user)
+        result = rules_uc.run_rules(actor_user=request.user)
         return Response(result.as_dict(), status=status.HTTP_200_OK)
 
 
 class RuleSimulateView(APIView):
     def post(self, request):
-        entity_states = request.data.get("entity_states") if isinstance(request.data, dict) else None
-        if entity_states is None:
-            entity_states = {}
-        if not isinstance(entity_states, dict):
-            return Response({"detail": "entity_states must be an object."}, status=status.HTTP_400_BAD_REQUEST)
-
-        cleaned: dict[str, str] = {}
-        for key, value in entity_states.items():
-            if not isinstance(key, str):
-                continue
-            if not isinstance(value, str):
-                continue
-            entity_id = key.strip()
-            if not entity_id:
-                continue
-            cleaned[entity_id] = value
-
-        assume_for_seconds = request.data.get("assume_for_seconds") if isinstance(request.data, dict) else None
-        if assume_for_seconds is not None and not isinstance(assume_for_seconds, int):
-            return Response(
-                {"detail": "assume_for_seconds must be an integer."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        result = rules_engine.simulate_rules(
-            entity_states=cleaned,
-            assume_for_seconds=assume_for_seconds,
-        )
+        try:
+            input_data = rules_uc.parse_simulate_input(request.data)
+        except rules_uc.RuleSimulateInputError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        result = rules_uc.simulate_rules(input_data=input_data)
         return Response(result, status=status.HTTP_200_OK)
 
 

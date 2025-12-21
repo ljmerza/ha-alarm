@@ -50,6 +50,9 @@ interface AlarmStore {
   clearError: () => void
 }
 
+let unsubscribeWebSocketStatus: (() => void) | null = null
+let unsubscribeWebSocketMessages: (() => void) | null = null
+
 export const useAlarmStore = create<AlarmStore>((set, get) => ({
   alarmState: null,
   settings: null,
@@ -150,29 +153,41 @@ export const useAlarmStore = create<AlarmStore>((set, get) => ({
   },
 
   connectWebSocket: () => {
+    if (!unsubscribeWebSocketStatus) {
+      unsubscribeWebSocketStatus = wsManager.onStatusChange((status) => {
+        set({ wsStatus: status })
+      })
+    }
+
+    if (!unsubscribeWebSocketMessages) {
+      unsubscribeWebSocketMessages = wsManager.onMessage((message) => {
+        switch (message.type) {
+          case 'alarm_state':
+            get().updateAlarmState((message.payload as { state: AlarmStateSnapshot }).state)
+            break
+          case 'event':
+            get().addEvent((message.payload as { event: AlarmEvent }).event)
+            break
+          case 'countdown':
+            get().setCountdown(message.payload as CountdownPayload)
+            break
+        }
+      })
+    }
+
     wsManager.connect()
-
-    wsManager.onStatusChange((status) => {
-      set({ wsStatus: status })
-    })
-
-    wsManager.onMessage((message) => {
-      switch (message.type) {
-        case 'alarm_state':
-          get().updateAlarmState((message.payload as { state: AlarmStateSnapshot }).state)
-          break
-        case 'event':
-          get().addEvent((message.payload as { event: AlarmEvent }).event)
-          break
-        case 'countdown':
-          get().setCountdown(message.payload as CountdownPayload)
-          break
-      }
-    })
   },
 
   disconnectWebSocket: () => {
     wsManager.disconnect()
+    if (unsubscribeWebSocketStatus) {
+      unsubscribeWebSocketStatus()
+      unsubscribeWebSocketStatus = null
+    }
+    if (unsubscribeWebSocketMessages) {
+      unsubscribeWebSocketMessages()
+      unsubscribeWebSocketMessages = null
+    }
   },
 
   setWsStatus: (status: WebSocketStatus) => {
