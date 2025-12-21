@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores'
 import { codesService, usersService } from '@/services'
 import { AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
 import type { AlarmStateType, UserRoleType } from '@/lib/constants'
+import { getErrorMessage } from '@/lib/errors'
 import type { AlarmCode, CreateCodeRequest, UpdateCodeRequest, User } from '@/types'
 import { queryKeys } from '@/types'
 import { Badge } from '@/components/ui/badge'
@@ -35,14 +36,6 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
 function isAdminRole(role: UserRoleType | undefined): boolean {
   return role === UserRole.ADMIN
-}
-
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === 'object') {
-    const maybe = err as { message?: unknown }
-    if (typeof maybe.message === 'string' && maybe.message.trim()) return maybe.message
-  }
-  return fallback
 }
 
 function toUtcIsoFromDatetimeLocal(value: string): string | null {
@@ -263,7 +256,7 @@ function CodesPageContent() {
       setCreateAllowedStates(ARMABLE_STATES)
       setCreateReauthPassword('')
     } catch (err) {
-      setCreateError(getErrorMessage(err, 'Failed to create code'))
+      setCreateError(getErrorMessage(err) || 'Failed to create code')
     }
   }
 
@@ -318,7 +311,7 @@ function CodesPageContent() {
       await updateMutation.mutateAsync({ id: editingCodeId, req })
       cancelEdit()
     } catch (err) {
-      setEditError(getErrorMessage(err, 'Failed to update code'))
+      setEditError(getErrorMessage(err) || 'Failed to update code')
     }
   }
 
@@ -334,7 +327,7 @@ function CodesPageContent() {
                 htmlFor="user"
                 error={
                   usersQuery.isError
-                    ? `Failed to load users: ${getErrorMessage(usersQuery.error, 'Unknown error')}`
+                    ? `Failed to load users: ${getErrorMessage(usersQuery.error) || 'Unknown error'}`
                     : null
                 }
               >
@@ -572,12 +565,12 @@ function CodesPageContent() {
       >
         {codesQuery.isLoading && <LoadingInline label="Loading codes…" />}
         {codesQuery.isError && (
-          <Alert variant="error" layout="inline">
-            <AlertDescription>
-              Failed to load codes: {getErrorMessage(codesQuery.error, 'Unknown error')}
-            </AlertDescription>
-          </Alert>
-        )}
+            <Alert variant="error" layout="inline">
+              <AlertDescription>
+              Failed to load codes: {getErrorMessage(codesQuery.error) || 'Unknown error'}
+              </AlertDescription>
+            </Alert>
+          )}
         {!codesQuery.isLoading && !codesQuery.isError && (codesQuery.data || []).length === 0 && (
           <EmptyState title="No codes found." description="Create a code above or ask an admin to add one." />
         )}

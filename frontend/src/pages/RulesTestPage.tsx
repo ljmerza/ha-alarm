@@ -70,7 +70,7 @@ export function RulesTestPage() {
     queryFn: entitiesService.list,
   })
 
-  const entities: Entity[] = entitiesQuery.data ?? []
+  const entities: Entity[] = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
   const [rows, setRows] = useState<Row[]>([{ id: uniqueId(), entityId: '', state: 'on' }])
   const [mode, setMode] = useState<'scenario' | 'delta'>('scenario')
   const [deltaEntityId, setDeltaEntityId] = useState('')
@@ -97,12 +97,6 @@ export function RulesTestPage() {
     setSavedScenarios(loadSavedScenarios())
   }, [])
 
-  useEffect(() => {
-    const message = getErrorMessage(entitiesQuery.error)
-    if (!message) return
-    setError((prev) => prev ?? message)
-  }, [entitiesQuery.error])
-
   const syncEntitiesMutation = useMutation({
     mutationFn: entitiesService.sync,
     onSuccess: async () => {
@@ -117,6 +111,7 @@ export function RulesTestPage() {
   }
 
   const isLoading = entitiesQuery.isLoading || entitiesQuery.isFetching || syncEntitiesMutation.isPending
+  const displayedError = error ?? getErrorMessage(entitiesQuery.error) ?? null
 
   const entityStates = useMemo(() => {
     const out: Record<string, string> = {}
@@ -346,9 +341,9 @@ export function RulesTestPage() {
         }
       />
 
-      {error && (
+      {displayedError && (
         <Alert variant="error" layout="banner">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{displayedError}</AlertDescription>
         </Alert>
       )}
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -132,8 +132,8 @@ export function RulesPage() {
     queryFn: entitiesService.list,
   })
 
-  const rules: Rule[] = rulesQuery.data ?? []
-  const entities: Entity[] = entitiesQuery.data ?? []
+  const rules: Rule[] = useMemo(() => rulesQuery.data ?? [], [rulesQuery.data])
+  const entities: Entity[] = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
   const isLoading = rulesQuery.isLoading || entitiesQuery.isLoading
 
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -161,12 +161,6 @@ export function RulesPage() {
     const fromConditions = conditions.map((c) => c.entityId.trim()).filter(Boolean)
     return Array.from(new Set(fromConditions)).sort()
   }, [conditions])
-
-  useEffect(() => {
-    const message = getErrorMessage(rulesQuery.error) || getErrorMessage(entitiesQuery.error)
-    if (!message) return
-    setError((prev) => prev ?? message)
-  }, [rulesQuery.error, entitiesQuery.error])
 
   const resetForm = () => {
     setEditingId(null)
@@ -258,16 +252,20 @@ export function RulesPage() {
     await runRulesMutation.mutateAsync()
   }
 
-  useEffect(() => {
-    if (advanced) return
-    const parsedForSeconds =
-      forSecondsText.trim() === '' ? null : Number.parseInt(forSecondsText.trim(), 10)
-    const seconds =
-      typeof parsedForSeconds === 'number' && Number.isNaN(parsedForSeconds) ? null : parsedForSeconds
-    const def = buildDefinitionFromBuilder(whenOperator, conditions, seconds, actions)
-    setDefinitionText(JSON.stringify(def, null, 2))
-    setEntityIdsText(derivedEntityIds.join('\n'))
-  }, [advanced, whenOperator, conditions, forSecondsText, actions, derivedEntityIds])
+  const builderSeconds = useMemo(() => {
+    const parsed = forSecondsText.trim() === '' ? null : Number.parseInt(forSecondsText.trim(), 10)
+    if (typeof parsed === 'number' && Number.isNaN(parsed)) return null
+    return parsed
+  }, [forSecondsText])
+
+  const builderDefinitionText = useMemo(() => {
+    const def = buildDefinitionFromBuilder(whenOperator, conditions, builderSeconds, actions)
+    return JSON.stringify(def, null, 2)
+  }, [whenOperator, conditions, builderSeconds, actions])
+
+  const derivedEntityIdsText = useMemo(() => derivedEntityIds.join('\n'), [derivedEntityIds])
+
+  const displayedError = error ?? getErrorMessage(rulesQuery.error) ?? getErrorMessage(entitiesQuery.error) ?? null
 
   const startEdit = (rule: Rule) => {
     setEditingId(rule.id)
@@ -458,9 +456,9 @@ export function RulesPage() {
           <AlertDescription>{notice}</AlertDescription>
         </Alert>
       )}
-      {error && (
+      {displayedError && (
         <Alert variant="error" layout="banner">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{displayedError}</AlertDescription>
         </Alert>
       )}
 
@@ -535,7 +533,20 @@ export function RulesPage() {
               </div>
               <HelpTip content="Disabled rules are saved but ignored by the engine." />
             </div>
-            <Button type="button" variant="outline" onClick={() => setAdvanced((v) => !v)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAdvanced((v) => {
+                  const next = !v
+                  if (next) {
+                    setDefinitionText(builderDefinitionText)
+                    setEntityIdsText(derivedEntityIdsText)
+                  }
+                  return next
+                })
+              }}
+            >
               {advanced ? 'Use Builder' : 'Advanced JSON'}
             </Button>
           </div>
@@ -561,7 +572,7 @@ export function RulesPage() {
 	              </label>
               <Textarea
                 className="min-h-[88px]"
-                value={entityIdsText}
+                value={advanced ? entityIdsText : derivedEntityIdsText}
                 onChange={(e) => setEntityIdsText(e.target.value)}
                 placeholder="One per line (or comma-separated)"
                 disabled={!advanced}
@@ -914,7 +925,7 @@ export function RulesPage() {
 	            </label>
             <Textarea
               className="min-h-[220px] font-mono text-xs"
-              value={definitionText}
+              value={advanced ? definitionText : builderDefinitionText}
               onChange={(e) => setDefinitionText(e.target.value)}
               spellCheck={false}
               disabled={!advanced}
