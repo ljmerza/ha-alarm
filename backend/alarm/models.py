@@ -27,6 +27,14 @@ class AlarmEventType(models.TextChoices):
     STATE_CHANGED = "state_changed", "State changed"
 
 
+class SystemConfigValueType(models.TextChoices):
+    BOOLEAN = "boolean", "Boolean"
+    INTEGER = "integer", "Integer"
+    FLOAT = "float", "Float"
+    STRING = "string", "String"
+    JSON = "json", "JSON"
+
+
 class AlarmSystem(models.Model):
     name = models.CharField(max_length=150)
     timezone = models.CharField(max_length=64, default=settings.TIME_ZONE)
@@ -40,15 +48,6 @@ class AlarmSystem(models.Model):
 class AlarmSettingsProfile(models.Model):
     name = models.CharField(max_length=150, unique=True)
     is_active = models.BooleanField(default=False)
-    delay_time = models.PositiveIntegerField(default=60)
-    arming_time = models.PositiveIntegerField(default=60)
-    trigger_time = models.PositiveIntegerField(default=120)
-    disarm_after_trigger = models.BooleanField(default=False)
-    code_arm_required = models.BooleanField(default=True)
-    available_arming_states = models.JSONField(default=list, blank=True)
-    state_overrides = models.JSONField(default=dict, blank=True)
-    audio_visual_settings = models.JSONField(default=dict, blank=True)
-    sensor_behavior = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -94,6 +93,30 @@ class AlarmStateSnapshot(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover - simple representation
         return f"{self.current_state} ({self.entered_at})"
+
+
+class AlarmSettingsEntry(models.Model):
+    profile = models.ForeignKey(
+        AlarmSettingsProfile,
+        on_delete=models.CASCADE,
+        related_name="entries",
+    )
+    key = models.CharField(max_length=128)
+    value_type = models.CharField(max_length=16, choices=SystemConfigValueType.choices)
+    value = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["profile", "key"], name="alarm_settings_entries_unique_profile_key"),
+        ]
+        indexes = [
+            models.Index(fields=["profile", "key"]),
+            models.Index(fields=["key"]),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return f"{self.profile_id}:{self.key}"
 
 
 class Sensor(models.Model):
@@ -301,3 +324,30 @@ class RuleActionLog(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover - simple representation
         return f"{self.fired_at}:{self.kind}"
+
+
+class SystemConfig(models.Model):
+    key = models.CharField(max_length=128, unique=True)
+    name = models.CharField(max_length=150)
+    value_type = models.CharField(max_length=16, choices=SystemConfigValueType.choices)
+    value = models.JSONField(default=dict, blank=True)
+    description = models.TextField(blank=True)
+    modified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="system_config_modified",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["key"]
+        indexes = [
+            models.Index(fields=["key"]),
+            models.Index(fields=["value_type"]),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return self.key

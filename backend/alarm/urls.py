@@ -11,6 +11,18 @@ urlpatterns = [
     path("entities/", views.EntitiesView.as_view(), name="alarm-entities"),
     path("entities/sync/", views.EntitySyncView.as_view(), name="alarm-entities-sync"),
     path("settings/", views.AlarmSettingsView.as_view(), name="alarm-settings"),
+    path("settings/profiles/", views.AlarmSettingsProfilesView.as_view(), name="alarm-settings-profiles"),
+    path(
+        "settings/profiles/<int:profile_id>/",
+        views.AlarmSettingsProfileDetailView.as_view(),
+        name="alarm-settings-profile-detail",
+    ),
+    path(
+        "settings/profiles/<int:profile_id>/activate/",
+        views.AlarmSettingsProfileActivateView.as_view(),
+        name="alarm-settings-profile-activate",
+    ),
+    path("settings/timing/<str:state>/", views.AlarmSettingsTimingView.as_view(), name="alarm-settings-timing"),
     path("sensors/", views.SensorsView.as_view(), name="alarm-sensors"),
     path("sensors/<int:sensor_id>/", views.SensorDetailView.as_view(), name="alarm-sensor-detail"),
     path("rules/", views.RulesView.as_view(), name="alarm-rules"),

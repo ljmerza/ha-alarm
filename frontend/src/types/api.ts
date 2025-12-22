@@ -78,6 +78,9 @@ export const queryKeys = {
     all: ['events'] as const,
     recent: ['events', 'recent'] as const,
   },
+  systemConfig: {
+    all: ['systemConfig'] as const,
+  },
   users: {
     all: ['users'] as const,
     current: ['users', 'current'] as const,

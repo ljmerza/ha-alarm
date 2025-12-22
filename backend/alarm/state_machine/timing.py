@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from alarm.models import AlarmSettingsProfile, AlarmStateSnapshot
+from alarm.state_machine.settings import get_setting_int, get_setting_json
 
 
 @dataclass(frozen=True)
@@ -21,15 +22,15 @@ class TimingSnapshot:
 
 def base_timing(profile: AlarmSettingsProfile) -> TimingSnapshot:
     return TimingSnapshot(
-        delay_time=profile.delay_time,
-        arming_time=profile.arming_time,
-        trigger_time=profile.trigger_time,
+        delay_time=get_setting_int(profile, "delay_time"),
+        arming_time=get_setting_int(profile, "arming_time"),
+        trigger_time=get_setting_int(profile, "trigger_time"),
     )
 
 
 def resolve_timing(profile: AlarmSettingsProfile, target_state: str) -> TimingSnapshot:
     timing = base_timing(profile)
-    overrides = profile.state_overrides or {}
+    overrides = get_setting_json(profile, "state_overrides") or {}
     if isinstance(overrides, dict):
         override = overrides.get(target_state) or {}
         if isinstance(override, dict):
@@ -50,4 +51,3 @@ def timing_from_snapshot(snapshot: AlarmStateSnapshot) -> TimingSnapshot:
             trigger_time=snapshot.timing_snapshot.get("trigger_time", timing.trigger_time),
         )
     return timing
-

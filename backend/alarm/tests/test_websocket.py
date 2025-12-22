@@ -57,3 +57,31 @@ class AlarmWebSocketTests(TransactionTestCase):
                 await communicator.disconnect()
 
         asyncio.run(run())
+
+    def test_websocket_rejects_invalid_token(self):
+        async def run():
+            communicator = WebsocketCommunicator(application, "/ws/alarm/?token=not-a-real-token")
+            try:
+                connected, _ = await communicator.connect()
+                self.assertFalse(connected)
+            finally:
+                await communicator.disconnect()
+
+        asyncio.run(run())
+
+    def test_websocket_ping_pong(self):
+        user = User.objects.create_user(email="wsping@example.com", password="pass")
+        token = Token.objects.create(user=user)
+
+        async def run():
+            communicator = WebsocketCommunicator(application, f"/ws/alarm/?token={token.key}")
+            try:
+                connected, _ = await communicator.connect()
+                self.assertTrue(connected)
+                await communicator.send_json_to({"type": "ping"})
+                msg = await communicator.receive_json_from(timeout=1)
+                self.assertEqual(msg, {"type": "pong"})
+            finally:
+                await communicator.disconnect()
+
+        asyncio.run(run())

@@ -13,6 +13,7 @@ from .events import record_sensor_event
 from .settings import get_active_settings_profile
 from .snapshot_store import get_snapshot_for_update, set_previous_armed_state, transition
 from .timing import resolve_timing, timing_from_snapshot
+from .settings import get_setting_bool
 
 
 @transaction.atomic
@@ -165,7 +166,7 @@ def timer_expired(*, reason: str = "timer_expired") -> AlarmStateSnapshot:
     if snapshot.current_state == AlarmState.TRIGGERED:
         snapshot.exit_at = None
         snapshot.save(update_fields=["exit_at"])
-        if snapshot.settings_profile.disarm_after_trigger:
+        if get_setting_bool(snapshot.settings_profile, "disarm_after_trigger"):
             snapshot.target_armed_state = None
             snapshot.timing_snapshot = {}
             snapshot.save(update_fields=["target_armed_state", "timing_snapshot"])

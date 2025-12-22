@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from alarm.models import AlarmSettingsProfile
 from alarm.serializers import AlarmSettingsProfileSerializer
+from alarm.use_cases.settings_profile import ensure_active_settings_profile
 
 
 class AlarmSettingsView(APIView):
     def get(self, request):
-        profile = AlarmSettingsProfile.objects.filter(is_active=True).first()
-        if not profile:
-            return Response(
-                {"detail": "No active alarm settings profile."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        profile = ensure_active_settings_profile()
         return Response(AlarmSettingsProfileSerializer(profile).data)
-

@@ -5,6 +5,8 @@ import type {
   ArmRequest,
   DisarmRequest,
   AlarmEvent,
+  AlarmSettingsProfileDetail,
+  AlarmSettingsProfileMeta,
   PaginatedResponse,
   PaginationParams,
 } from '@/types'
@@ -37,32 +39,30 @@ export const alarmService = {
   },
 
   async getSettingsProfiles(): Promise<AlarmSettingsProfile[]> {
-    return api.get<AlarmSettingsProfile[]>('/api/alarm/settings/profiles/')
+    return api.get<AlarmSettingsProfileMeta[]>('/api/alarm/settings/profiles/')
   },
 
-  async getSettingsProfile(id: number): Promise<AlarmSettingsProfile> {
-    return api.get<AlarmSettingsProfile>(`/api/alarm/settings/profiles/${id}/`)
+  async getSettingsProfile(id: number): Promise<AlarmSettingsProfileDetail> {
+    return api.get<AlarmSettingsProfileDetail>(`/api/alarm/settings/profiles/${id}/`)
   },
 
-  async createSettingsProfile(
-    profile: Omit<AlarmSettingsProfile, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<AlarmSettingsProfile> {
-    return api.post<AlarmSettingsProfile>('/api/alarm/settings/profiles/', profile)
+  async createSettingsProfile(profile: { name: string }): Promise<AlarmSettingsProfileMeta> {
+    return api.post<AlarmSettingsProfileMeta>('/api/alarm/settings/profiles/', profile)
   },
 
   async updateSettingsProfile(
     id: number,
-    profile: Partial<AlarmSettingsProfile>
-  ): Promise<AlarmSettingsProfile> {
-    return api.patch<AlarmSettingsProfile>(`/api/alarm/settings/profiles/${id}/`, profile)
+    changes: { name?: string; entries?: Array<{ key: string; value: unknown }> }
+  ): Promise<AlarmSettingsProfileDetail> {
+    return api.patch<AlarmSettingsProfileDetail>(`/api/alarm/settings/profiles/${id}/`, changes)
   },
 
   async deleteSettingsProfile(id: number): Promise<void> {
     return api.delete(`/api/alarm/settings/profiles/${id}/`)
   },
 
-  async activateSettingsProfile(id: number): Promise<AlarmSettingsProfile> {
-    return api.post<AlarmSettingsProfile>(`/api/alarm/settings/profiles/${id}/activate/`)
+  async activateSettingsProfile(id: number): Promise<AlarmSettingsProfileMeta> {
+    return api.post<AlarmSettingsProfileMeta>(`/api/alarm/settings/profiles/${id}/activate/`)
   },
 
   // Events

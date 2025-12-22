@@ -12,6 +12,7 @@ from rest_framework.test import APIClient, APITestCase
 from accounts.models import User
 from accounts.models import UserCode
 from alarm.models import AlarmEvent, AlarmEventType, AlarmSettingsProfile, AlarmState, Entity, Rule, Sensor
+from alarm.tests.settings_test_utils import set_profile_settings
 
 
 class AlarmApiTests(APITestCase):
@@ -28,9 +29,9 @@ class AlarmApiTests(APITestCase):
             pin_length=len(self.code_value),
             is_active=True,
         )
-        AlarmSettingsProfile.objects.create(
-            name="Default",
-            is_active=True,
+        profile = AlarmSettingsProfile.objects.create(name="Default", is_active=True)
+        set_profile_settings(
+            profile,
             delay_time=5,
             arming_time=5,
             trigger_time=5,
@@ -280,9 +281,9 @@ class AlarmApiTests(APITestCase):
 
     def test_rules_run_endpoint_fires_immediate_rule(self):
         AlarmSettingsProfile.objects.all().delete()
-        AlarmSettingsProfile.objects.create(
-            name="Default",
-            is_active=True,
+        profile = AlarmSettingsProfile.objects.create(name="Default", is_active=True)
+        set_profile_settings(
+            profile,
             delay_time=5,
             arming_time=0,
             trigger_time=5,

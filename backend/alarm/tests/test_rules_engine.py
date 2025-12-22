@@ -8,19 +8,14 @@ from django.utils import timezone
 from accounts.models import User
 from alarm import rules_engine, services
 from alarm.models import AlarmSettingsProfile, AlarmState, Entity, Rule, RuleRuntimeState
+from alarm.tests.settings_test_utils import set_profile_settings
 
 
 class RuleEngineForTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="rules@example.com", password="pass")
-        AlarmSettingsProfile.objects.create(
-            name="Default",
-            is_active=True,
-            delay_time=5,
-            arming_time=0,
-            trigger_time=5,
-            code_arm_required=False,
-        )
+        profile = AlarmSettingsProfile.objects.create(name="Default", is_active=True)
+        set_profile_settings(profile, delay_time=5, arming_time=0, trigger_time=5, code_arm_required=False)
         services.get_current_snapshot(process_timers=False)
 
     def test_for_rule_schedules_then_fires(self):

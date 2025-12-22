@@ -7,10 +7,21 @@ from .home_assistant import HomeAssistantEntitiesView, HomeAssistantStatusView
 from .rules import RuleDetailView, RuleRunView, RuleSimulateView, RulesView
 from .sensors import SensorDetailView, SensorsView
 from .settings import AlarmSettingsView
+from .settings_profiles import (
+    AlarmSettingsProfileActivateView,
+    AlarmSettingsProfileDetailView,
+    AlarmSettingsProfilesView,
+    AlarmSettingsTimingView,
+)
+from .system_config import SystemConfigDetailView, SystemConfigListView
 from .transitions import ArmAlarmView, CancelArmingView, DisarmAlarmView
 
 __all__ = [
     "AlarmSettingsView",
+    "AlarmSettingsProfileActivateView",
+    "AlarmSettingsProfileDetailView",
+    "AlarmSettingsProfilesView",
+    "AlarmSettingsTimingView",
     "AlarmStateView",
     "AlarmEventsView",
     "ArmAlarmView",
@@ -26,4 +37,6 @@ __all__ = [
     "RulesView",
     "SensorDetailView",
     "SensorsView",
+    "SystemConfigDetailView",
+    "SystemConfigListView",
 ]

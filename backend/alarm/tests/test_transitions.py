@@ -8,14 +8,15 @@ from django.utils import timezone
 from accounts.models import User
 from alarm import services
 from alarm.models import AlarmSettingsProfile, AlarmState, AlarmStateSnapshot, Sensor
+from alarm.tests.settings_test_utils import set_profile_setting, set_profile_settings
 
 
 class AlarmTransitionTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="test@example.com", password="pass")
-        self.profile = AlarmSettingsProfile.objects.create(
-            name="Default",
-            is_active=True,
+        self.profile = AlarmSettingsProfile.objects.create(name="Default", is_active=True)
+        set_profile_settings(
+            self.profile,
             delay_time=30,
             arming_time=10,
             trigger_time=20,
@@ -82,8 +83,7 @@ class AlarmTransitionTests(TestCase):
         self.assertEqual(snapshot.current_state, AlarmState.ARMED_AWAY)
 
     def test_trigger_timer_disarms_when_configured(self):
-        self.profile.disarm_after_trigger = True
-        self.profile.save(update_fields=["disarm_after_trigger"])
+        set_profile_setting(self.profile, "disarm_after_trigger", True)
         snapshot = services.arm(target_state=AlarmState.ARMED_AWAY, user=self.user)
         snapshot.exit_at = timezone.now() - timedelta(seconds=1)
         snapshot.save(update_fields=["exit_at"])

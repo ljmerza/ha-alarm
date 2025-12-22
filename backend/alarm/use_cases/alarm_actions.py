@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from alarm import services
 from alarm.models import AlarmState
+from alarm.state_machine.settings import get_setting_bool
 from config.domain_exceptions import UnauthorizedError, ValidationError
 
 
@@ -35,7 +36,7 @@ def arm_alarm(*, user, target_state: str, raw_code):
 
     profile = services.get_active_settings_profile()
     code_obj = None
-    if profile.code_arm_required or raw_code is not None:
+    if get_setting_bool(profile, "code_arm_required") or raw_code is not None:
         if not raw_code:
             services.record_failed_code(
                 user=user,
