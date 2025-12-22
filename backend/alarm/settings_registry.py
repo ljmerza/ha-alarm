@@ -66,7 +66,12 @@ ALARM_PROFILE_SETTINGS: list[SettingDefinition] = [
         key="state_overrides",
         name="State overrides",
         value_type=SystemConfigValueType.JSON,
-        default={},
+        default={
+            AlarmState.ARMED_HOME: {"arming_time": 0},
+            AlarmState.ARMED_NIGHT: {"arming_time": 10},
+            AlarmState.ARMED_AWAY: {"arming_time": 60},
+            AlarmState.ARMED_VACATION: {"arming_time": 60},
+        },
         description="Per-state timing overrides (delay_time/arming_time/trigger_time).",
     ),
     SettingDefinition(

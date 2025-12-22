@@ -32,6 +32,17 @@ def arm(*, target_state: str, user=None, code=None, reason: str = "arm") -> Alar
     snapshot.timing_snapshot = timing.as_dict()
     snapshot.save(update_fields=["settings_profile", "target_armed_state", "timing_snapshot"])
 
+    if timing.arming_time <= 0:
+        return transition(
+            snapshot=snapshot,
+            state_to=target_state,
+            now=now,
+            user=user,
+            code=code,
+            reason=reason,
+            exit_at=None,
+        )
+
     exit_at = now + timedelta(seconds=timing.arming_time)
     return transition(
         snapshot=snapshot,

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { LoadingInline } from '@/components/ui/loading-inline'
 import { DatalistInput } from '@/components/ui/datalist-input'
+import { HelpTip } from '@/components/ui/help-tip'
 import { getErrorMessage } from '@/lib/errors'
 import { AlarmState, AlarmStateLabels, type AlarmStateType, UserRole } from '@/lib/constants'
 import type { AlarmSettingsProfile } from '@/types'
@@ -20,6 +21,10 @@ import { useUpdateSettingsProfileMutation } from '@/hooks/useSettingsQueries'
 type SettingsDraft = {
   delayTime: string
   armingTime: string
+  armingTimeHome: string
+  armingTimeAway: string
+  armingTimeNight: string
+  armingTimeVacation: string
   triggerTime: string
   disarmAfterTrigger: boolean
   codeArmRequired: boolean
@@ -48,6 +53,18 @@ const HA_NOTIFY_STATE_OPTIONS: AlarmStateType[] = [
   AlarmState.TRIGGERED,
   AlarmState.DISARMED,
 ]
+
+const ARM_MODE_TOOLTIPS: Record<AlarmStateType, string> = {
+  [AlarmState.ARMED_HOME]: 'Typically perimeter-only protection while you are home.',
+  [AlarmState.ARMED_AWAY]: 'Typically full protection when the home is empty.',
+  [AlarmState.ARMED_NIGHT]: 'Typically like Home, but optimized for sleeping hours.',
+  [AlarmState.ARMED_VACATION]: 'Typically like Away, plus extra deterrence/automations.',
+  [AlarmState.ARMED_CUSTOM_BYPASS]: 'Custom/bypass mode (if supported by your setup).',
+  [AlarmState.DISARMED]: 'All sensors inactive; no alarm triggers.',
+  [AlarmState.ARMING]: 'Exit delay countdown before an armed mode becomes active.',
+  [AlarmState.PENDING]: 'Entry delay countdown after an entry sensor trips.',
+  [AlarmState.TRIGGERED]: 'Alarm is active/triggered.',
+}
 
 export function SettingsPage() {
   const currentUserQuery = useCurrentUserQuery()
@@ -97,6 +114,27 @@ export function SettingsPage() {
     }
 
     try {
+      const existingOverrides = settings.stateOverrides ?? {}
+      const nextStateOverrides = {
+        ...existingOverrides,
+        [AlarmState.ARMED_HOME]: {
+          ...(existingOverrides[AlarmState.ARMED_HOME] ?? {}),
+          armingTime: parsed.value.armingTimeHome,
+        },
+        [AlarmState.ARMED_AWAY]: {
+          ...(existingOverrides[AlarmState.ARMED_AWAY] ?? {}),
+          armingTime: parsed.value.armingTimeAway,
+        },
+        [AlarmState.ARMED_NIGHT]: {
+          ...(existingOverrides[AlarmState.ARMED_NIGHT] ?? {}),
+          armingTime: parsed.value.armingTimeNight,
+        },
+        [AlarmState.ARMED_VACATION]: {
+          ...(existingOverrides[AlarmState.ARMED_VACATION] ?? {}),
+          armingTime: parsed.value.armingTimeVacation,
+        },
+      }
+
       await updateMutation.mutateAsync({
         id: settings.id,
         changes: {
@@ -107,6 +145,7 @@ export function SettingsPage() {
             { key: 'disarm_after_trigger', value: parsed.value.disarmAfterTrigger },
             { key: 'code_arm_required', value: parsed.value.codeArmRequired },
             { key: 'available_arming_states', value: parsed.value.availableArmingStates },
+            { key: 'state_overrides', value: nextStateOverrides },
             { key: 'home_assistant_notify', value: parsed.value.homeAssistantNotify },
           ],
         },
@@ -169,7 +208,11 @@ export function SettingsPage() {
             }
           >
             <div className="grid gap-4 md:grid-cols-3">
-              <FormField label="Entry delay" htmlFor="delayTime" description="Seconds before triggering after an entry sensor trips.">
+              <FormField
+                label="Entry delay"
+                htmlFor="delayTime"
+                help="How long you have to disarm after an entry-point sensor trips (e.g., front door) before the alarm triggers."
+              >
                 <Input
                   id="delayTime"
                   type="number"
@@ -181,7 +224,11 @@ export function SettingsPage() {
                 />
               </FormField>
 
-              <FormField label="Exit delay" htmlFor="armingTime" description="Seconds before the system becomes armed.">
+              <FormField
+                label="Exit delay (default)"
+                htmlFor="armingTime"
+                help="Fallback countdown after you arm before the alarm is active. Per-mode exit delays below override this."
+              >
                 <Input
                   id="armingTime"
                   type="number"
@@ -193,7 +240,11 @@ export function SettingsPage() {
                 />
               </FormField>
 
-              <FormField label="Trigger time" htmlFor="triggerTime" description="Seconds the alarm stays triggered before auto behavior.">
+              <FormField
+                label="Trigger time"
+                htmlFor="triggerTime"
+                help="How long the alarm remains in the Triggered state before it returns to the previous armed state (or disarms, if configured)."
+              >
                 <Input
                   id="triggerTime"
                   type="number"
@@ -205,13 +256,81 @@ export function SettingsPage() {
                 />
               </FormField>
             </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <FormField
+                label={`Exit delay: ${AlarmStateLabels[AlarmState.ARMED_HOME]}`}
+                htmlFor="armingTimeHome"
+                help="Countdown after arming Home before it becomes active. Set to 0 to arm immediately."
+              >
+                <Input
+                  id="armingTimeHome"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={draft.armingTimeHome}
+                  onChange={(e) => setDraft((prev) => (prev ? { ...prev, armingTimeHome: e.target.value } : prev))}
+                  disabled={!isAdmin || isLoading}
+                />
+              </FormField>
+
+              <FormField
+                label={`Exit delay: ${AlarmStateLabels[AlarmState.ARMED_AWAY]}`}
+                htmlFor="armingTimeAway"
+                help="Countdown after arming Away before it becomes active."
+              >
+                <Input
+                  id="armingTimeAway"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={draft.armingTimeAway}
+                  onChange={(e) => setDraft((prev) => (prev ? { ...prev, armingTimeAway: e.target.value } : prev))}
+                  disabled={!isAdmin || isLoading}
+                />
+              </FormField>
+
+              <FormField
+                label={`Exit delay: ${AlarmStateLabels[AlarmState.ARMED_NIGHT]}`}
+                htmlFor="armingTimeNight"
+                help="Countdown after arming Night before it becomes active."
+              >
+                <Input
+                  id="armingTimeNight"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={draft.armingTimeNight}
+                  onChange={(e) => setDraft((prev) => (prev ? { ...prev, armingTimeNight: e.target.value } : prev))}
+                  disabled={!isAdmin || isLoading}
+                />
+              </FormField>
+
+              <FormField
+                label={`Exit delay: ${AlarmStateLabels[AlarmState.ARMED_VACATION]}`}
+                htmlFor="armingTimeVacation"
+                help="Countdown after arming Vacation before it becomes active."
+              >
+                <Input
+                  id="armingTimeVacation"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={draft.armingTimeVacation}
+                  onChange={(e) =>
+                    setDraft((prev) => (prev ? { ...prev, armingTimeVacation: e.target.value } : prev))
+                  }
+                  disabled={!isAdmin || isLoading}
+                />
+              </FormField>
+            </div>
           </SectionCard>
 
           <SectionCard title="Behavior" description="Basic behavior toggles.">
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 label="Disarm after trigger"
-                description="If enabled, auto-disarm after trigger time; otherwise return to the previous armed state."
+                help="If enabled, auto-disarm after Trigger time; otherwise return to the previous armed state."
               >
                 <Switch
                   checked={draft.disarmAfterTrigger}
@@ -222,7 +341,7 @@ export function SettingsPage() {
 
               <FormField
                 label="Code required to arm"
-                description="If disabled, arming does not require a PIN (disarm still requires a code)."
+                help="If disabled, arming does not require a PIN (disarm still requires a code)."
               >
                 <Switch
                   checked={draft.codeArmRequired}
@@ -248,7 +367,10 @@ export function SettingsPage() {
                       }
                       disabled={!isAdmin || isLoading}
                     />
-                    <div className="text-sm">{AlarmStateLabels[state]}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm">{AlarmStateLabels[state]}</div>
+                      <HelpTip content={ARM_MODE_TOOLTIPS[state] || 'Arming mode.'} />
+                    </div>
                   </label>
                 )
               })}
@@ -260,7 +382,10 @@ export function SettingsPage() {
             description="Send Home Assistant notify.* messages on selected alarm state changes."
           >
             <div className="grid gap-4 md:grid-cols-2">
-              <FormField label="Enable" description="Requires Home Assistant to be configured and reachable.">
+              <FormField
+                label="Enable"
+                help="When enabled, the backend will call a Home Assistant notify.* service for the state changes you select below."
+              >
                 <Switch
                   checked={draft.homeAssistantNotifyEnabled}
                   onCheckedChange={(checked) =>
@@ -273,7 +398,7 @@ export function SettingsPage() {
               <FormField
                 label="Cooldown (seconds)"
                 htmlFor="haNotifyCooldown"
-                description="Minimum time between notifications for the same state."
+                help="Minimum time between repeated notifications for the same state (helps avoid spam during flapping/reconnects)."
               >
                 <Input
                   id="haNotifyCooldown"
@@ -295,7 +420,7 @@ export function SettingsPage() {
               <FormField
                 label="Notify service"
                 htmlFor="haNotifyService"
-                description="Home Assistant notify service in the form notify.notify or notify.mobile_app_*."
+                help="Home Assistant notify service in the form notify.notify or notify.mobile_app_*."
               >
                 <DatalistInput
                   listId="haNotifyServices"
@@ -310,10 +435,11 @@ export function SettingsPage() {
                 />
               </FormField>
 
-              <FormField label="States" description="Choose which state changes generate a notification.">
+              <FormField label="States" help="Choose which state changes generate a Home Assistant notification.">
                 <div className="grid gap-2">
                   {HA_NOTIFY_STATE_OPTIONS.map((state) => {
                     const checked = draft.homeAssistantNotifyStates.includes(state)
+                    const tooltip = `Notify when the alarm enters ${AlarmStateLabels[state]}.`
                     return (
                       <label key={state} className="flex items-center gap-3 rounded-md border border-input px-3 py-2">
                         <Checkbox
@@ -330,7 +456,10 @@ export function SettingsPage() {
                           }
                           disabled={!isAdmin || isLoading || !draft.homeAssistantNotifyEnabled}
                         />
-                        <div className="text-sm">{AlarmStateLabels[state]}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm">{AlarmStateLabels[state]}</div>
+                          <HelpTip content={tooltip} />
+                        </div>
                       </label>
                     )
                   })}
@@ -347,16 +476,31 @@ export function SettingsPage() {
 export default SettingsPage
 
 function draftFromSettings(settings: AlarmSettingsProfile): SettingsDraft {
+  const getOverrideInt = (value: unknown): number | null => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || Number.isNaN(value)) return null
+    return Math.max(0, Math.floor(value))
+  }
+
+  const armingTimeDefault = getOverrideInt(settings.armingTime) ?? 0
+  const overrides = settings.stateOverrides ?? {}
+  const armingTimeHome = getOverrideInt(overrides[AlarmState.ARMED_HOME]?.armingTime) ?? armingTimeDefault
+  const armingTimeAway = getOverrideInt(overrides[AlarmState.ARMED_AWAY]?.armingTime) ?? armingTimeDefault
+  const armingTimeNight = getOverrideInt(overrides[AlarmState.ARMED_NIGHT]?.armingTime) ?? armingTimeDefault
+  const armingTimeVacation = getOverrideInt(overrides[AlarmState.ARMED_VACATION]?.armingTime) ?? armingTimeDefault
+
   const haNotify = settings.homeAssistantNotify ?? null
   const cooldown = (() => {
     const value = haNotify?.cooldownSeconds
-    if (typeof value !== 'number' || !Number.isFinite(value) || Number.isNaN(value)) return 0
-    return Math.max(0, Math.floor(value))
+    return getOverrideInt(value) ?? 0
   })()
   const selectedStates = Array.isArray(haNotify?.states) ? haNotify!.states : []
   return {
     delayTime: String(settings.delayTime ?? 0),
     armingTime: String(settings.armingTime ?? 0),
+    armingTimeHome: String(armingTimeHome),
+    armingTimeAway: String(armingTimeAway),
+    armingTimeNight: String(armingTimeNight),
+    armingTimeVacation: String(armingTimeVacation),
     triggerTime: String(settings.triggerTime ?? 0),
     disarmAfterTrigger: Boolean(settings.disarmAfterTrigger),
     codeArmRequired: Boolean(settings.codeArmRequired),
@@ -384,6 +528,10 @@ function parseDraft(
       value: {
         delayTime: number
         armingTime: number
+        armingTimeHome: number
+        armingTimeAway: number
+        armingTimeNight: number
+        armingTimeVacation: number
         triggerTime: number
         disarmAfterTrigger: boolean
         codeArmRequired: boolean
@@ -401,6 +549,20 @@ function parseDraft(
   if (!delayTime.ok) return delayTime
   const armingTime = parseNonNegativeInt('Exit delay', draft.armingTime)
   if (!armingTime.ok) return armingTime
+  const armingTimeHome = parseNonNegativeInt(`Exit delay (${AlarmStateLabels[AlarmState.ARMED_HOME]})`, draft.armingTimeHome)
+  if (!armingTimeHome.ok) return armingTimeHome
+  const armingTimeAway = parseNonNegativeInt(`Exit delay (${AlarmStateLabels[AlarmState.ARMED_AWAY]})`, draft.armingTimeAway)
+  if (!armingTimeAway.ok) return armingTimeAway
+  const armingTimeNight = parseNonNegativeInt(
+    `Exit delay (${AlarmStateLabels[AlarmState.ARMED_NIGHT]})`,
+    draft.armingTimeNight
+  )
+  if (!armingTimeNight.ok) return armingTimeNight
+  const armingTimeVacation = parseNonNegativeInt(
+    `Exit delay (${AlarmStateLabels[AlarmState.ARMED_VACATION]})`,
+    draft.armingTimeVacation
+  )
+  if (!armingTimeVacation.ok) return armingTimeVacation
   const triggerTime = parseNonNegativeInt('Trigger time', draft.triggerTime)
   if (!triggerTime.ok) return triggerTime
 
@@ -422,6 +584,10 @@ function parseDraft(
     value: {
       delayTime: delayTime.value,
       armingTime: armingTime.value,
+      armingTimeHome: armingTimeHome.value,
+      armingTimeAway: armingTimeAway.value,
+      armingTimeNight: armingTimeNight.value,
+      armingTimeVacation: armingTimeVacation.value,
       triggerTime: triggerTime.value,
       disarmAfterTrigger: draft.disarmAfterTrigger,
       codeArmRequired: draft.codeArmRequired,

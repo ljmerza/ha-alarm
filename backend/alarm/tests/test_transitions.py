@@ -40,6 +40,13 @@ class AlarmTransitionTests(TestCase):
         self.assertEqual(snapshot.target_armed_state, AlarmState.ARMED_AWAY)
         self.assertIsNotNone(snapshot.exit_at)
 
+    def test_arm_home_zero_exit_delay_arms_immediately(self):
+        set_profile_setting(self.profile, "state_overrides", {AlarmState.ARMED_HOME: {"arming_time": 0}})
+        snapshot = services.arm(target_state=AlarmState.ARMED_HOME, user=self.user)
+        snapshot.refresh_from_db()
+        self.assertEqual(snapshot.current_state, AlarmState.ARMED_HOME)
+        self.assertIsNone(snapshot.exit_at)
+
     def test_timer_expired_arming_to_armed(self):
         snapshot = services.arm(target_state=AlarmState.ARMED_AWAY, user=self.user)
         snapshot.exit_at = timezone.now() - timedelta(seconds=1)
