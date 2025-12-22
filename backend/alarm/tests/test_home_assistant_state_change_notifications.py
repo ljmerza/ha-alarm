@@ -23,7 +23,7 @@ class HomeAssistantStateChangeNotificationsTests(TestCase):
             code_arm_required=False,
             home_assistant_notify={
                 "enabled": True,
-                "service": "notify.notify",
+                "services": ["notify.notify", "notify.mobile_app_phone"],
                 "cooldown_seconds": 0,
                 "states": [AlarmState.DISARMED],
             },
@@ -34,12 +34,13 @@ class HomeAssistantStateChangeNotificationsTests(TestCase):
                 transitions.arm(target_state=AlarmState.ARMED_AWAY, user=user)
                 transitions.disarm(user=user)
 
-        mock_gateway.call_service.assert_called_once()
-        kwargs = mock_gateway.call_service.call_args.kwargs
-        self.assertEqual(kwargs["domain"], "notify")
-        self.assertEqual(kwargs["service"], "notify")
-        self.assertIn("service_data", kwargs)
-        self.assertEqual(kwargs["service_data"]["data"]["state_to"], AlarmState.DISARMED)
+        self.assertEqual(mock_gateway.call_service.call_count, 2)
+        for call in mock_gateway.call_service.call_args_list:
+            kwargs = call.kwargs
+            self.assertEqual(kwargs["domain"], "notify")
+            self.assertIn("service", kwargs)
+            self.assertIn("service_data", kwargs)
+            self.assertEqual(kwargs["service_data"]["data"]["state_to"], AlarmState.DISARMED)
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     def test_skips_notification_when_state_not_selected(self):
@@ -53,7 +54,7 @@ class HomeAssistantStateChangeNotificationsTests(TestCase):
             code_arm_required=False,
             home_assistant_notify={
                 "enabled": True,
-                "service": "notify.notify",
+                "services": ["notify.notify"],
                 "cooldown_seconds": 0,
                 "states": [],
             },
@@ -65,4 +66,3 @@ class HomeAssistantStateChangeNotificationsTests(TestCase):
                 transitions.disarm(user=user)
 
         mock_gateway.call_service.assert_not_called()
-

@@ -39,7 +39,8 @@ export interface AlarmSettingsProfile {
 
 export interface HomeAssistantNotifySettings {
   enabled: boolean
-  service: string
+  service?: string
+  services?: string[]
   cooldownSeconds?: number
   states: AlarmStateType[]
 }

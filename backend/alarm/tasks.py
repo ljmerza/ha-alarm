@@ -16,16 +16,24 @@ ha_gateway = default_home_assistant_gateway
 @dataclass(frozen=True)
 class _NotifyConfig:
     enabled: bool
-    service: str
+    services: tuple[str, ...]
     cooldown_seconds: int
     states: set[str]
 
 
 def _parse_notify_config(raw: object) -> _NotifyConfig:
     if not isinstance(raw, dict):
-        return _NotifyConfig(enabled=False, service="notify.notify", cooldown_seconds=0, states=set())
+        return _NotifyConfig(enabled=False, services=("notify.notify",), cooldown_seconds=0, states=set())
     enabled = bool(raw.get("enabled", False))
-    service = raw.get("service") if isinstance(raw.get("service"), str) else "notify.notify"
+    services_raw = raw.get("services", None)
+    services: list[str] = []
+    if isinstance(services_raw, list):
+        for item in services_raw:
+            if isinstance(item, str) and item.strip():
+                services.append(item.strip())
+    if not services:
+        single = raw.get("service") if isinstance(raw.get("service"), str) else "notify.notify"
+        services = [single.strip() or "notify.notify"]
     cooldown_seconds_raw = raw.get("cooldown_seconds", 0)
     try:
         cooldown_seconds = max(0, int(cooldown_seconds_raw))
@@ -39,7 +47,7 @@ def _parse_notify_config(raw: object) -> _NotifyConfig:
                 normalized.add(item)
     return _NotifyConfig(
         enabled=enabled,
-        service=service.strip() or "notify.notify",
+        services=tuple(services),
         cooldown_seconds=cooldown_seconds,
         states=normalized,
     )
@@ -119,9 +127,6 @@ def send_home_assistant_state_change_notification(
         if not cache.add(cooldown_key, "1", timeout=cfg.cooldown_seconds):
             return {"ok": True, "skipped": True, "reason": "cooldown", "event_id": event_id, "state_to": state_to}
 
-    service_tuple = _split_service(cfg.service) or ("notify", "notify")
-    domain, service = service_tuple
-
     user_display: str | None = None
     if user_id:
         User = get_user_model()
@@ -132,20 +137,24 @@ def send_home_assistant_state_change_notification(
     title, message = _format_title_and_message(state_from=state_from, state_to=state_to, user_display=user_display)
 
     try:
-        ha_gateway.call_service(
-            domain=domain,
-            service=service,
-            service_data={
-                "title": title,
-                "message": message,
-                "data": {
-                    "event_id": event_id,
-                    "occurred_at": occurred_at_iso,
-                    "state_from": state_from,
-                    "state_to": state_to,
+        called: list[dict[str, str]] = []
+        for full_service in cfg.services:
+            domain, service = _split_service(full_service) or ("notify", "notify")
+            ha_gateway.call_service(
+                domain=domain,
+                service=service,
+                service_data={
+                    "title": title,
+                    "message": message,
+                    "data": {
+                        "event_id": event_id,
+                        "occurred_at": occurred_at_iso,
+                        "state_from": state_from,
+                        "state_to": state_to,
+                    },
                 },
-            },
-        )
+            )
+            called.append({"domain": domain, "service": service})
     except Exception as exc:
         return {
             "ok": False,
@@ -155,4 +164,4 @@ def send_home_assistant_state_change_notification(
             "error": str(exc),
         }
 
-    return {"ok": True, "skipped": False, "event_id": event_id, "state_to": state_to}
+    return {"ok": True, "skipped": False, "event_id": event_id, "state_to": state_to, "called": called}

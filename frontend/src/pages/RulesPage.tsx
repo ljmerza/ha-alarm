@@ -18,8 +18,10 @@ import { Switch } from '@/components/ui/switch'
 import { Pill } from '@/components/ui/pill'
 import { DatalistInput } from '@/components/ui/datalist-input'
 import { EmptyState } from '@/components/ui/empty-state'
+import { IconButton } from '@/components/ui/icon-button'
 import { getErrorMessage } from '@/lib/errors'
 import { useEntitiesQuery, useRulesQuery, useSyncEntitiesMutation, useRunRulesMutation, useSaveRuleMutation, useDeleteRuleMutation } from '@/hooks/useRulesQueries'
+import { X } from 'lucide-react'
 
 const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'trigger', label: 'Trigger' },
@@ -146,6 +148,7 @@ export function RulesPage() {
     { id: uniqueId(), entityId: '', equals: 'on', negate: false },
   ])
   const [actions, setActions] = useState<ActionRow[]>([{ id: uniqueId(), type: 'alarm_trigger' }])
+  const [targetEntityPickerByActionId, setTargetEntityPickerByActionId] = useState<Record<string, string>>({})
 
   const entityIdOptions = useMemo(() => entities.map((e) => e.entityId), [entities])
   const entityIdSet = useMemo(() => new Set(entities.map((e) => e.entityId)), [entities])
@@ -217,6 +220,17 @@ export function RulesPage() {
   }, [whenOperator, conditions, builderSeconds, actions])
 
   const derivedEntityIdsText = useMemo(() => derivedEntityIds.join('\n'), [derivedEntityIds])
+
+  const updateHaActionTargetEntityIds = (actionId: string, nextEntityIds: string[]) => {
+    const normalized = Array.from(new Set(nextEntityIds.map((id) => id.trim()).filter(Boolean)))
+    setActions((prev) =>
+      prev.map((row) => {
+        if (row.id !== actionId) return row
+        if (row.type !== 'ha_call_service') return row
+        return { ...row, targetEntityIds: normalized.join(', ') }
+      }) as ActionRow[]
+    )
+  }
 
   const displayedError = error ?? getErrorMessage(rulesQuery.error) ?? getErrorMessage(entitiesQuery.error) ?? null
 
@@ -822,20 +836,101 @@ export function RulesPage() {
 	                                Target entity IDs{' '}
 	                                <HelpTip
 	                                  className="ml-1"
-	                                  content="Comma-separated entity_ids to target (maps to target.entity_ids)."
+	                                  content="Select one or more entity_ids to target (maps to target.entity_ids)."
 	                                />
 	                              </label>
-                              <Input
-                                value={a.targetEntityIds}
-                                onChange={(e) =>
-                                  setActions((prev) =>
-                                    prev.map((row) =>
-                                      row.id === a.id ? { ...row, targetEntityIds: e.target.value } : row
-                                    ) as ActionRow[]
+                              {(() => {
+                                const selected = parseEntityIds(a.targetEntityIds)
+                                const pickerValue = targetEntityPickerByActionId[a.id] ?? ''
+
+                                const addSelected = () => {
+                                  const next = pickerValue.trim()
+                                  if (!next) return
+                                  updateHaActionTargetEntityIds(a.id, [...selected, next])
+                                  setTargetEntityPickerByActionId((prev) => ({ ...prev, [a.id]: '' }))
+                                }
+
+                                const removeSelected = (entityId: string) => {
+                                  updateHaActionTargetEntityIds(
+                                    a.id,
+                                    selected.filter((id) => id !== entityId)
                                   )
                                 }
-                                placeholder="notify.phone, light.kitchen"
-                              />
+
+                                return (
+                                  <div className="space-y-2">
+                                    <div className="flex flex-col gap-2 md:flex-row">
+                                      <div className="flex-1">
+                                        <DatalistInput
+                                          listId={`ha-target-entities-${a.id}`}
+                                          options={entityIdOptions}
+                                          value={pickerValue}
+                                          onChange={(e) => {
+                                            const next = e.target.value
+                                            setTargetEntityPickerByActionId((prev) => ({
+                                              ...prev,
+                                              [a.id]: next,
+                                            }))
+                                            if (entityIdSet.has(next) && !selected.includes(next)) {
+                                              updateHaActionTargetEntityIds(a.id, [...selected, next])
+                                              setTargetEntityPickerByActionId((prev) => ({ ...prev, [a.id]: '' }))
+                                            }
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key !== 'Enter') return
+                                            e.preventDefault()
+                                            addSelected()
+                                          }}
+                                          placeholder="Start typing an entity_id (e.g., light.kitchen)…"
+                                        />
+                                      </div>
+                                      <Button type="button" variant="outline" onClick={addSelected}>
+                                        Add
+                                      </Button>
+                                    </div>
+
+                                    {selected.length ? (
+                                      <div className="flex flex-wrap gap-2">
+                                        {selected.map((entityId) => {
+                                          const isKnown = entityIdSet.has(entityId)
+                                          return (
+                                            <Pill
+                                              key={entityId}
+                                              variant={isKnown ? 'default' : 'muted'}
+                                              className="gap-1 pr-1"
+                                            >
+                                              <span>{entityId}</span>
+                                              <IconButton
+                                                type="button"
+                                                variant="ghost"
+                                                className="h-5 w-5"
+                                                onClick={() => removeSelected(entityId)}
+                                                aria-label={`Remove target ${entityId}`}
+                                              >
+                                                <X className="h-3 w-3" />
+                                              </IconButton>
+                                            </Pill>
+                                          )
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-muted-foreground">No targets selected.</div>
+                                    )}
+
+                                    <Input
+                                      value={a.targetEntityIds}
+                                      onChange={(e) =>
+                                        setActions((prev) =>
+                                          prev.map((row) =>
+                                            row.id === a.id ? { ...row, targetEntityIds: e.target.value } : row
+                                          ) as ActionRow[]
+                                        )
+                                      }
+                                      placeholder="Or paste comma/newline-separated entity_ids…"
+                                    />
+                                  </div>
+                                )
+                              })()}
                             </div>
                             <div className="md:col-span-3 space-y-1">
 	                              <label className="text-xs text-muted-foreground">

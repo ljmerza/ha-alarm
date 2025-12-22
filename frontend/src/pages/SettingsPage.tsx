@@ -10,6 +10,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { LoadingInline } from '@/components/ui/loading-inline'
 import { DatalistInput } from '@/components/ui/datalist-input'
 import { HelpTip } from '@/components/ui/help-tip'
+import { IconButton } from '@/components/ui/icon-button'
+import { Pill } from '@/components/ui/pill'
 import { getErrorMessage } from '@/lib/errors'
 import { AlarmState, AlarmStateLabels, type AlarmStateType, UserRole } from '@/lib/constants'
 import type { AlarmSettingsProfile } from '@/types'
@@ -17,6 +19,7 @@ import { useAlarmSettingsQuery } from '@/hooks/useAlarmQueries'
 import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
 import { useHomeAssistantNotifyServices } from '@/hooks/useHomeAssistant'
 import { useUpdateSettingsProfileMutation } from '@/hooks/useSettingsQueries'
+import { X } from 'lucide-react'
 
 type SettingsDraft = {
   delayTime: string
@@ -30,7 +33,7 @@ type SettingsDraft = {
   codeArmRequired: boolean
   availableArmingStates: AlarmStateType[]
   homeAssistantNotifyEnabled: boolean
-  homeAssistantNotifyService: string
+  homeAssistantNotifyServices: string[]
   homeAssistantNotifyCooldownSeconds: string
   homeAssistantNotifyStates: AlarmStateType[]
 }
@@ -86,6 +89,7 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [hasInitialized, setHasInitialized] = useState(false)
+  const [haNotifyServicePicker, setHaNotifyServicePicker] = useState('')
 
   useEffect(() => {
     if (hasInitialized) return
@@ -114,7 +118,7 @@ export function SettingsPage() {
     }
 
     try {
-      const existingOverrides = settings.stateOverrides ?? {}
+      const existingOverrides = normalizeStateOverrides(settings.stateOverrides ?? {})
       const nextStateOverrides = {
         ...existingOverrides,
         [AlarmState.ARMED_HOME]: {
@@ -418,21 +422,95 @@ export function SettingsPage() {
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <FormField
-                label="Notify service"
-                htmlFor="haNotifyService"
-                help="Home Assistant notify service in the form notify.notify or notify.mobile_app_*."
+                label="Notify services"
+                help="One or more Home Assistant notify services (notify.notify, notify.mobile_app_*, etc.)."
               >
-                <DatalistInput
-                  listId="haNotifyServices"
-                  options={haNotifyServicesQuery.data ?? []}
-                  id="haNotifyService"
-                  value={draft.homeAssistantNotifyService}
-                  onChange={(e) =>
-                    setDraft((prev) => (prev ? { ...prev, homeAssistantNotifyService: e.target.value } : prev))
-                  }
-                  disabled={!isAdmin || isLoading}
-                  placeholder="notify.notify"
-                />
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-2 md:flex-row">
+                    <div className="flex-1">
+                      <DatalistInput
+                        listId="haNotifyServices"
+                        options={haNotifyServicesQuery.data ?? []}
+                        value={haNotifyServicePicker}
+                        onChange={(e) => setHaNotifyServicePicker(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          e.preventDefault()
+                          const next = haNotifyServicePicker.trim()
+                          if (!next) return
+                          setDraft((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  homeAssistantNotifyServices: Array.from(
+                                    new Set([...prev.homeAssistantNotifyServices, next])
+                                  ),
+                                }
+                              : prev
+                          )
+                          setHaNotifyServicePicker('')
+                        }}
+                        disabled={!isAdmin || isLoading}
+                        placeholder="Start typing a notify service…"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!isAdmin || isLoading}
+                      onClick={() => {
+                        const next = haNotifyServicePicker.trim()
+                        if (!next) return
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                homeAssistantNotifyServices: Array.from(
+                                  new Set([...prev.homeAssistantNotifyServices, next])
+                                ),
+                              }
+                            : prev
+                        )
+                        setHaNotifyServicePicker('')
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+
+                  {draft.homeAssistantNotifyServices.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {draft.homeAssistantNotifyServices.map((service) => (
+                        <Pill key={service} className="gap-1 pr-1">
+                          <span>{service}</span>
+                          <IconButton
+                            type="button"
+                            variant="ghost"
+                            className="h-5 w-5"
+                            onClick={() =>
+                              setDraft((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      homeAssistantNotifyServices: prev.homeAssistantNotifyServices.filter(
+                                        (s) => s !== service
+                                      ),
+                                    }
+                                  : prev
+                              )
+                            }
+                            aria-label={`Remove notify service ${service}`}
+                            disabled={!isAdmin || isLoading}
+                          >
+                            <X className="h-3 w-3" />
+                          </IconButton>
+                        </Pill>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">No notify services selected.</div>
+                  )}
+                </div>
               </FormField>
 
               <FormField label="States" help="Choose which state changes generate a Home Assistant notification.">
@@ -482,7 +560,7 @@ function draftFromSettings(settings: AlarmSettingsProfile): SettingsDraft {
   }
 
   const armingTimeDefault = getOverrideInt(settings.armingTime) ?? 0
-  const overrides = settings.stateOverrides ?? {}
+  const overrides = normalizeStateOverrides(settings.stateOverrides ?? {})
   const armingTimeHome = getOverrideInt(overrides[AlarmState.ARMED_HOME]?.armingTime) ?? armingTimeDefault
   const armingTimeAway = getOverrideInt(overrides[AlarmState.ARMED_AWAY]?.armingTime) ?? armingTimeDefault
   const armingTimeNight = getOverrideInt(overrides[AlarmState.ARMED_NIGHT]?.armingTime) ?? armingTimeDefault
@@ -494,6 +572,12 @@ function draftFromSettings(settings: AlarmSettingsProfile): SettingsDraft {
     return getOverrideInt(value) ?? 0
   })()
   const selectedStates = Array.isArray(haNotify?.states) ? haNotify!.states : []
+  const services = (() => {
+    const list = Array.isArray(haNotify?.services) ? haNotify!.services : null
+    if (list && list.every((s) => typeof s === 'string')) return list.filter(Boolean)
+    const single = typeof haNotify?.service === 'string' ? haNotify.service : 'notify.notify'
+    return [single].filter(Boolean)
+  })()
   return {
     delayTime: String(settings.delayTime ?? 0),
     armingTime: String(settings.armingTime ?? 0),
@@ -506,7 +590,7 @@ function draftFromSettings(settings: AlarmSettingsProfile): SettingsDraft {
     codeArmRequired: Boolean(settings.codeArmRequired),
     availableArmingStates: Array.isArray(settings.availableArmingStates) ? settings.availableArmingStates : [],
     homeAssistantNotifyEnabled: Boolean(haNotify?.enabled),
-    homeAssistantNotifyService: typeof haNotify?.service === 'string' ? haNotify.service : 'notify.notify',
+    homeAssistantNotifyServices: services.length ? services : ['notify.notify'],
     homeAssistantNotifyCooldownSeconds: String(cooldown),
     homeAssistantNotifyStates: selectedStates.filter((state) => HA_NOTIFY_STATE_OPTIONS.includes(state)),
   }
@@ -538,7 +622,7 @@ function parseDraft(
         availableArmingStates: AlarmStateType[]
         homeAssistantNotify: {
           enabled: boolean
-          service: string
+          services: string[]
           cooldownSeconds: number
           states: AlarmStateType[]
         }
@@ -572,8 +656,11 @@ function parseDraft(
   const cooldownSeconds = parseNonNegativeInt('Cooldown', draft.homeAssistantNotifyCooldownSeconds)
   if (!cooldownSeconds.ok) return cooldownSeconds
 
-  const notifyService = draft.homeAssistantNotifyService.trim() || 'notify.notify'
-  if (draft.homeAssistantNotifyEnabled && !notifyService.includes('.')) {
+  const notifyServices = draft.homeAssistantNotifyServices.map((s) => s.trim()).filter(Boolean)
+  if (draft.homeAssistantNotifyEnabled && notifyServices.length === 0) {
+    return { ok: false, error: 'Select at least one notify service.' }
+  }
+  if (draft.homeAssistantNotifyEnabled && notifyServices.some((s) => !s.includes('.'))) {
     return { ok: false, error: 'Notify service must look like notify.notify or notify.mobile_app_*.' }
   }
 
@@ -594,7 +681,7 @@ function parseDraft(
       availableArmingStates: modes,
       homeAssistantNotify: {
         enabled: draft.homeAssistantNotifyEnabled,
-        service: notifyService,
+        services: notifyServices.length ? notifyServices : ['notify.notify'],
         cooldownSeconds: cooldownSeconds.value,
         states: notifyStates,
       },
@@ -605,4 +692,21 @@ function parseDraft(
 function toggleState(states: AlarmStateType[], state: AlarmStateType): AlarmStateType[] {
   if (states.includes(state)) return states.filter((s) => s !== state)
   return [...states, state]
+}
+
+function normalizeStateOverrides(value: unknown): Record<string, Record<string, unknown>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const out: Record<string, Record<string, unknown>> = {}
+  for (const [rawKey, rawOverride] of Object.entries(value as Record<string, unknown>)) {
+    if (!rawKey) continue
+    const normalizedKey = rawKey.includes('_')
+      ? rawKey
+      : rawKey
+          .replace(/([A-Z])/g, '_$1')
+          .replace(/__/g, '_')
+          .toLowerCase()
+    if (!rawOverride || typeof rawOverride !== 'object' || Array.isArray(rawOverride)) continue
+    out[normalizedKey] = rawOverride as Record<string, unknown>
+  }
+  return out
 }

@@ -33,7 +33,7 @@ ALARM_PROFILE_SETTINGS: list[SettingDefinition] = [
         key="trigger_time",
         name="Trigger time",
         value_type=SystemConfigValueType.INTEGER,
-        default=120,
+        default=600,
         description="How long (seconds) the alarm remains triggered before auto behavior applies.",
     ),
     SettingDefinition(
