@@ -8,6 +8,11 @@ urlpatterns = [
     path("state/", views.AlarmStateView.as_view(), name="alarm-state"),
     path("home-assistant/status/", views.HomeAssistantStatusView.as_view(), name="ha-status"),
     path("home-assistant/entities/", views.HomeAssistantEntitiesView.as_view(), name="ha-entities"),
+    path(
+        "home-assistant/notify-services/",
+        views.HomeAssistantNotifyServicesView.as_view(),
+        name="ha-notify-services",
+    ),
     path("entities/", views.EntitiesView.as_view(), name="alarm-entities"),
     path("entities/sync/", views.EntitySyncView.as_view(), name="alarm-entities-sync"),
     path("settings/", views.AlarmSettingsView.as_view(), name="alarm-settings"),

@@ -317,3 +317,77 @@ def call_service(
     with urlopen(request, timeout=timeout_seconds) as response:
         if not (200 <= response.status < 300):
             raise RuntimeError(f"Unexpected status: {response.status}")
+
+
+def list_services(*, timeout_seconds: float = 5.0) -> list[dict[str, Any]]:
+    """
+    Returns Home Assistant services payload (domain + services map).
+    See: GET /api/services
+    """
+    base_url = (settings.HOME_ASSISTANT_URL or "").strip()
+    token = (settings.HOME_ASSISTANT_TOKEN or "").strip()
+    if not base_url or not token:
+        logger.info("HA services: not configured (missing url/token)")
+        return []
+
+    url = _build_url("/api/services")
+    request = Request(url, headers=_ha_headers(token), method="GET")
+    try:
+        logger.debug("HA services: fetching via raw HTTP GET %s (timeout=%ss)", url, timeout_seconds)
+        with urlopen(request, timeout=timeout_seconds) as response:
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            raw = response.read().decode("utf-8")
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            logger.warning(
+                "HA services: JSON decode error (content_type=%s, body_preview=%r)",
+                content_type or "unknown",
+                raw[:256],
+            )
+            raise RuntimeError(
+                f"Home Assistant returned non-JSON response (content-type: {content_type or 'unknown'})."
+            ) from exc
+    except HTTPError as exc:
+        try:
+            content_type = (exc.headers.get("Content-Type") or "").lower()
+        except Exception:
+            content_type = ""
+        try:
+            body_preview = exc.read(256).decode("utf-8", errors="replace")
+        except Exception:
+            body_preview = ""
+        logger.warning(
+            "HA services: HTTPError (base_url=%s, status=%s, content_type=%s, body_preview=%r)",
+            base_url,
+            exc.code,
+            content_type or "unknown",
+            body_preview,
+        )
+        raise RuntimeError(f"Home Assistant returned HTTP {exc.code}.") from exc
+    except URLError as exc:
+        logger.warning("HA services: URLError (base_url=%s, reason=%s)", base_url, exc.reason)
+        raise RuntimeError(f"Home Assistant request failed: {exc.reason}") from exc
+
+    if not isinstance(payload, list):
+        logger.warning("HA services: unexpected payload type %s", type(payload).__name__)
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def list_notify_services(*, timeout_seconds: float = 5.0) -> list[str]:
+    """
+    Returns a sorted list of notify services like: ["notify.notify", "notify.mobile_app_phone"].
+    """
+    rows = list_services(timeout_seconds=timeout_seconds)
+    out: set[str] = set()
+    for row in rows:
+        if row.get("domain") != "notify":
+            continue
+        services = row.get("services")
+        if not isinstance(services, dict):
+            continue
+        for service_name in services.keys():
+            if isinstance(service_name, str) and service_name:
+                out.add(f"notify.{service_name}")
+    return sorted(out)

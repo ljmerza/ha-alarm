@@ -27,6 +27,8 @@ class HomeAssistantGateway(Protocol):
 
     def list_entities(self, *, timeout_seconds: float = 5.0) -> list[dict[str, Any]]: ...
 
+    def list_notify_services(self, *, timeout_seconds: float = 5.0) -> list[str]: ...
+
     def call_service(
         self,
         *,
@@ -57,6 +59,9 @@ class DefaultHomeAssistantGateway:
 
     def list_entities(self, *, timeout_seconds: float = 5.0) -> list[dict[str, Any]]:
         return home_assistant.list_entities(timeout_seconds=timeout_seconds)
+
+    def list_notify_services(self, *, timeout_seconds: float = 5.0) -> list[str]:
+        return home_assistant.list_notify_services(timeout_seconds=timeout_seconds)
 
     def call_service(
         self,

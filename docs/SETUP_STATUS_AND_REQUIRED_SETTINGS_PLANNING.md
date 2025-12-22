@@ -112,6 +112,17 @@ Phase 1 policy:
 - Optional (“Skip for now”), but strongly recommended.
 - If disconnected, the UI should show an obvious warning and treat sensor states as unknown.
 
+### 7) Home Assistant Push Notifications (optional)
+What it means:
+- The system is configured to send Home Assistant `notify.*` messages on selected alarm state changes (arm/disarm/pending/triggered).
+
+Why it matters:
+- Provides immediate “push” awareness without requiring a separate notification provider.
+
+Phase 1 policy:
+- Optional and not a setup gate.
+- If HA is disconnected, this feature is effectively unavailable and should be shown as “Offline”.
+
 ## Backend Contract: Setup Status Endpoint
 
 Endpoint:

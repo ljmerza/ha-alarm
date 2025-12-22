@@ -3,7 +3,11 @@ from __future__ import annotations
 from .alarm_state import AlarmStateView
 from .entities import EntitiesView, EntitySyncView
 from .events import AlarmEventsView
-from .home_assistant import HomeAssistantEntitiesView, HomeAssistantStatusView
+from .home_assistant import (
+    HomeAssistantEntitiesView,
+    HomeAssistantNotifyServicesView,
+    HomeAssistantStatusView,
+)
 from .rules import RuleDetailView, RuleRunView, RuleSimulateView, RulesView
 from .sensors import SensorDetailView, SensorsView
 from .settings import AlarmSettingsView
@@ -30,6 +34,7 @@ __all__ = [
     "EntitiesView",
     "EntitySyncView",
     "HomeAssistantEntitiesView",
+    "HomeAssistantNotifyServicesView",
     "HomeAssistantStatusView",
     "RuleDetailView",
     "RuleRunView",

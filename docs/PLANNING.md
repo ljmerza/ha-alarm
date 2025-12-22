@@ -456,6 +456,26 @@ Triggered → [trigger_time expires] → Disarmed
 - Security: Validate webhook signature/token
 - Log all actions taken via notifications
 
+**Configurable State-Change Push Notifications (Phase 1–2)**
+- Add a settings-driven option to push notifications to Home Assistant on selected alarm state changes.
+- Supported “events” (initial):
+  - Armed (per mode): `armed_home`, `armed_away`, `armed_night`, `armed_vacation`
+  - `disarmed`
+  - `pending` (entry delay started)
+  - `triggered`
+  - (Optional) `arming` (exit delay started) and `triggered_cleared` (disarm from triggered)
+- Configuration knobs:
+  - Enable/disable per state (or per transition: `from_state` → `to_state`).
+  - Select HA notify target:
+    - `notify.notify` (default) OR an explicit `notify.*` service (e.g. `notify.mobile_app_*`).
+  - Message templates (simple): title/body per event; include variables like `to_state`, `from_state`, `timestamp`, `user_display_name`.
+  - Throttling/cooldown per event type (avoid spam during flapping).
+  - Optional “critical” flag for `triggered` (platform-dependent behavior).
+- Delivery path:
+  - On every state transition, emit an `AlarmEvent` (already a core requirement).
+  - A background job (Celery) consumes state-change events and calls HA `notify` via the `HomeAssistantGateway`.
+  - Failures should be non-blocking for the state transition (log + surface in system health).
+
 **Example Notification Scenarios:**
 
 *Code Usage:*

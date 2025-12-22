@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.db import transaction
 from django.utils import timezone
 
 from alarm.models import AlarmState, AlarmStateSnapshot, Sensor
@@ -59,7 +60,7 @@ def transition(
             "last_transition_by",
         ]
     )
-    record_state_event(
+    event = record_state_event(
         snapshot=snapshot,
         state_from=state_from,
         state_to=state_to,
@@ -68,6 +69,14 @@ def transition(
         sensor=sensor,
         metadata=metadata,
         timestamp=now,
+    )
+    _schedule_home_assistant_notify(
+        event_id=event.id,
+        settings_profile_id=snapshot.settings_profile_id,
+        state_from=state_from,
+        state_to=state_to,
+        occurred_at_iso=now.isoformat(),
+        user_id=getattr(user, "id", None),
     )
     return snapshot
 
@@ -78,3 +87,25 @@ def set_previous_armed_state(snapshot: AlarmStateSnapshot) -> None:
     elif snapshot.current_state == AlarmState.ARMING and snapshot.target_armed_state:
         snapshot.previous_state = snapshot.target_armed_state
 
+
+def _schedule_home_assistant_notify(
+    *,
+    event_id: int,
+    settings_profile_id: int,
+    state_from: str | None,
+    state_to: str,
+    occurred_at_iso: str,
+    user_id,
+) -> None:
+    from alarm.tasks import send_home_assistant_state_change_notification
+
+    transaction.on_commit(
+        lambda: send_home_assistant_state_change_notification.delay(
+            event_id=event_id,
+            settings_profile_id=settings_profile_id,
+            state_from=state_from,
+            state_to=state_to,
+            occurred_at_iso=occurred_at_iso,
+            user_id=str(user_id) if user_id else None,
+        )
+    )

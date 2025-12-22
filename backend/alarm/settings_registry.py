@@ -91,6 +91,18 @@ ALARM_PROFILE_SETTINGS: list[SettingDefinition] = [
         },
         description="Policies around open sensors at arm time.",
     ),
+    SettingDefinition(
+        key="home_assistant_notify",
+        name="Home Assistant notifications",
+        value_type=SystemConfigValueType.JSON,
+        default={
+            "enabled": False,
+            "service": "notify.notify",
+            "cooldown_seconds": 0,
+            "states": [],
+        },
+        description="Send Home Assistant notify.* messages on selected alarm state changes.",
+    ),
 ]
 
 ALARM_PROFILE_SETTINGS_BY_KEY = {d.key: d for d in ALARM_PROFILE_SETTINGS}
@@ -107,4 +119,3 @@ SYSTEM_CONFIG_SETTINGS: list[SettingDefinition] = [
 ]
 
 SYSTEM_CONFIG_SETTINGS_BY_KEY = {d.key: d for d in SYSTEM_CONFIG_SETTINGS}
-

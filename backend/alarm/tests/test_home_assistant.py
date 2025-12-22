@@ -67,6 +67,17 @@ class HomeAssistantStatusApiTests(APITestCase):
         self.assertEqual(response.data["detail"], "Failed to fetch Home Assistant entities.")
 
     @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
+    @patch("alarm.views.home_assistant.ha_gateway")
+    def test_notify_services_returns_data(self, mock_gateway):
+        mock_gateway.ensure_available.return_value = object()
+        mock_gateway.list_notify_services.return_value = ["notify.notify", "notify.mobile_app_phone"]
+
+        url = reverse("ha-notify-services")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"], ["notify.notify", "notify.mobile_app_phone"])
+
+    @override_settings(HOME_ASSISTANT_URL="http://ha:8123", HOME_ASSISTANT_TOKEN="token")
     @patch("alarm.views.entities.ha_gateway")
     def test_entity_sync_imports_entities(self, mock_gateway):
         mock_gateway.ensure_available.return_value = object()

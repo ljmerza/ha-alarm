@@ -39,3 +39,24 @@ class HomeAssistantEntitiesView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         return Response({"data": entities}, status=status.HTTP_200_OK)
+
+
+class HomeAssistantNotifyServicesView(APIView):
+    def get(self, request):
+        try:
+            ha_gateway.ensure_available()
+        except HomeAssistantNotConfigured as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except HomeAssistantNotReachable as exc:
+            return Response(
+                {"detail": "Home Assistant is not reachable.", "error": exc.error},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        try:
+            services = ha_gateway.list_notify_services()
+        except Exception as exc:
+            return Response(
+                {"detail": "Failed to fetch Home Assistant notify services.", "error": str(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"data": services}, status=status.HTTP_200_OK)

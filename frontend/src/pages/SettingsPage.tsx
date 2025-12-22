@@ -8,11 +8,13 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { LoadingInline } from '@/components/ui/loading-inline'
+import { DatalistInput } from '@/components/ui/datalist-input'
 import { getErrorMessage } from '@/lib/errors'
 import { AlarmState, AlarmStateLabels, type AlarmStateType, UserRole } from '@/lib/constants'
 import type { AlarmSettingsProfile } from '@/types'
 import { useAlarmSettingsQuery } from '@/hooks/useAlarmQueries'
 import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
+import { useHomeAssistantNotifyServices } from '@/hooks/useHomeAssistant'
 import { useUpdateSettingsProfileMutation } from '@/hooks/useSettingsQueries'
 
 type SettingsDraft = {
@@ -22,6 +24,10 @@ type SettingsDraft = {
   disarmAfterTrigger: boolean
   codeArmRequired: boolean
   availableArmingStates: AlarmStateType[]
+  homeAssistantNotifyEnabled: boolean
+  homeAssistantNotifyService: string
+  homeAssistantNotifyCooldownSeconds: string
+  homeAssistantNotifyStates: AlarmStateType[]
 }
 
 const ARM_MODE_OPTIONS: AlarmStateType[] = [
@@ -32,11 +38,23 @@ const ARM_MODE_OPTIONS: AlarmStateType[] = [
   AlarmState.ARMED_CUSTOM_BYPASS,
 ]
 
+const HA_NOTIFY_STATE_OPTIONS: AlarmStateType[] = [
+  AlarmState.ARMING,
+  AlarmState.ARMED_AWAY,
+  AlarmState.ARMED_HOME,
+  AlarmState.ARMED_NIGHT,
+  AlarmState.ARMED_VACATION,
+  AlarmState.PENDING,
+  AlarmState.TRIGGERED,
+  AlarmState.DISARMED,
+]
+
 export function SettingsPage() {
   const currentUserQuery = useCurrentUserQuery()
   const isAdmin = currentUserQuery.data?.role === UserRole.ADMIN
 
   const settingsQuery = useAlarmSettingsQuery()
+  const haNotifyServicesQuery = useHomeAssistantNotifyServices()
   const updateMutation = useUpdateSettingsProfileMutation()
 
   const settings = settingsQuery.data ?? null
@@ -89,6 +107,7 @@ export function SettingsPage() {
             { key: 'disarm_after_trigger', value: parsed.value.disarmAfterTrigger },
             { key: 'code_arm_required', value: parsed.value.codeArmRequired },
             { key: 'available_arming_states', value: parsed.value.availableArmingStates },
+            { key: 'home_assistant_notify', value: parsed.value.homeAssistantNotify },
           ],
         },
       })
@@ -235,6 +254,90 @@ export function SettingsPage() {
               })}
             </div>
           </SectionCard>
+
+          <SectionCard
+            title="Home Assistant notifications"
+            description="Send Home Assistant notify.* messages on selected alarm state changes."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField label="Enable" description="Requires Home Assistant to be configured and reachable.">
+                <Switch
+                  checked={draft.homeAssistantNotifyEnabled}
+                  onCheckedChange={(checked) =>
+                    setDraft((prev) => (prev ? { ...prev, homeAssistantNotifyEnabled: checked } : prev))
+                  }
+                  disabled={!isAdmin || isLoading}
+                />
+              </FormField>
+
+              <FormField
+                label="Cooldown (seconds)"
+                htmlFor="haNotifyCooldown"
+                description="Minimum time between notifications for the same state."
+              >
+                <Input
+                  id="haNotifyCooldown"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={draft.homeAssistantNotifyCooldownSeconds}
+                  onChange={(e) =>
+                    setDraft((prev) =>
+                      prev ? { ...prev, homeAssistantNotifyCooldownSeconds: e.target.value } : prev
+                    )
+                  }
+                  disabled={!isAdmin || isLoading}
+                />
+              </FormField>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <FormField
+                label="Notify service"
+                htmlFor="haNotifyService"
+                description="Home Assistant notify service in the form notify.notify or notify.mobile_app_*."
+              >
+                <DatalistInput
+                  listId="haNotifyServices"
+                  options={haNotifyServicesQuery.data ?? []}
+                  id="haNotifyService"
+                  value={draft.homeAssistantNotifyService}
+                  onChange={(e) =>
+                    setDraft((prev) => (prev ? { ...prev, homeAssistantNotifyService: e.target.value } : prev))
+                  }
+                  disabled={!isAdmin || isLoading}
+                  placeholder="notify.notify"
+                />
+              </FormField>
+
+              <FormField label="States" description="Choose which state changes generate a notification.">
+                <div className="grid gap-2">
+                  {HA_NOTIFY_STATE_OPTIONS.map((state) => {
+                    const checked = draft.homeAssistantNotifyStates.includes(state)
+                    return (
+                      <label key={state} className="flex items-center gap-3 rounded-md border border-input px-3 py-2">
+                        <Checkbox
+                          checked={checked}
+                          onChange={() =>
+                            setDraft((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    homeAssistantNotifyStates: toggleState(prev.homeAssistantNotifyStates, state),
+                                  }
+                                : prev
+                            )
+                          }
+                          disabled={!isAdmin || isLoading || !draft.homeAssistantNotifyEnabled}
+                        />
+                        <div className="text-sm">{AlarmStateLabels[state]}</div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </FormField>
+            </div>
+          </SectionCard>
         </div>
       )}
     </div>
@@ -244,6 +347,13 @@ export function SettingsPage() {
 export default SettingsPage
 
 function draftFromSettings(settings: AlarmSettingsProfile): SettingsDraft {
+  const haNotify = settings.homeAssistantNotify ?? null
+  const cooldown = (() => {
+    const value = haNotify?.cooldownSeconds
+    if (typeof value !== 'number' || !Number.isFinite(value) || Number.isNaN(value)) return 0
+    return Math.max(0, Math.floor(value))
+  })()
+  const selectedStates = Array.isArray(haNotify?.states) ? haNotify!.states : []
   return {
     delayTime: String(settings.delayTime ?? 0),
     armingTime: String(settings.armingTime ?? 0),
@@ -251,6 +361,10 @@ function draftFromSettings(settings: AlarmSettingsProfile): SettingsDraft {
     disarmAfterTrigger: Boolean(settings.disarmAfterTrigger),
     codeArmRequired: Boolean(settings.codeArmRequired),
     availableArmingStates: Array.isArray(settings.availableArmingStates) ? settings.availableArmingStates : [],
+    homeAssistantNotifyEnabled: Boolean(haNotify?.enabled),
+    homeAssistantNotifyService: typeof haNotify?.service === 'string' ? haNotify.service : 'notify.notify',
+    homeAssistantNotifyCooldownSeconds: String(cooldown),
+    homeAssistantNotifyStates: selectedStates.filter((state) => HA_NOTIFY_STATE_OPTIONS.includes(state)),
   }
 }
 
@@ -274,6 +388,12 @@ function parseDraft(
         disarmAfterTrigger: boolean
         codeArmRequired: boolean
         availableArmingStates: AlarmStateType[]
+        homeAssistantNotify: {
+          enabled: boolean
+          service: string
+          cooldownSeconds: number
+          states: AlarmStateType[]
+        }
       }
     }
   | { ok: false; error: string } {
@@ -287,6 +407,16 @@ function parseDraft(
   const modes = draft.availableArmingStates.filter((s) => ARM_MODE_OPTIONS.includes(s))
   if (modes.length === 0) return { ok: false, error: 'Select at least one arm mode.' }
 
+  const cooldownSeconds = parseNonNegativeInt('Cooldown', draft.homeAssistantNotifyCooldownSeconds)
+  if (!cooldownSeconds.ok) return cooldownSeconds
+
+  const notifyService = draft.homeAssistantNotifyService.trim() || 'notify.notify'
+  if (draft.homeAssistantNotifyEnabled && !notifyService.includes('.')) {
+    return { ok: false, error: 'Notify service must look like notify.notify or notify.mobile_app_*.' }
+  }
+
+  const notifyStates = draft.homeAssistantNotifyStates.filter((s) => HA_NOTIFY_STATE_OPTIONS.includes(s))
+
   return {
     ok: true,
     value: {
@@ -296,6 +426,12 @@ function parseDraft(
       disarmAfterTrigger: draft.disarmAfterTrigger,
       codeArmRequired: draft.codeArmRequired,
       availableArmingStates: modes,
+      homeAssistantNotify: {
+        enabled: draft.homeAssistantNotifyEnabled,
+        service: notifyService,
+        cooldownSeconds: cooldownSeconds.value,
+        states: notifyStates,
+      },
     },
   }
 }

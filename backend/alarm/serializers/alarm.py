@@ -52,6 +52,7 @@ class AlarmSettingsProfileSerializer(serializers.Serializer):
     state_overrides = serializers.JSONField(read_only=True)
     audio_visual_settings = serializers.JSONField(read_only=True)
     sensor_behavior = serializers.JSONField(read_only=True)
+    home_assistant_notify = serializers.JSONField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
@@ -68,6 +69,7 @@ class AlarmSettingsProfileSerializer(serializers.Serializer):
                 "state_overrides": get_setting_json(instance, "state_overrides") or {},
                 "audio_visual_settings": get_setting_json(instance, "audio_visual_settings") or {},
                 "sensor_behavior": get_setting_json(instance, "sensor_behavior") or {},
+                "home_assistant_notify": get_setting_json(instance, "home_assistant_notify") or {},
             }
         )
         return meta

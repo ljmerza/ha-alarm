@@ -30,6 +30,13 @@ Out of scope: notifications, automations, MQTT, HA entity mapping details.
 - state_overrides (JSON, keyed by state, overrides for delay/arming/trigger)
 - audio_visual_settings (JSON, minimal for MVP)
 - sensor_behavior (JSON, warn_on_open_sensors, force_arm_enabled)
+- notification_settings (JSON, minimal for Phase 1–2)
+  - `home_assistant_notify`:
+    - `enabled` (bool)
+    - `service` (string, e.g. `notify.notify` or `notify.mobile_app_*`)
+    - `events` (object of booleans by event key, e.g. `armed_away`, `disarmed`, `pending`, `triggered`)
+    - `cooldown_seconds` (int, optional)
+    - `templates` (optional: title/body per event with variables)
 
 ### AlarmStateSnapshot
 - current_state (enum: disarmed, arming, armed_home, armed_away, armed_night, armed_vacation, pending, triggered)

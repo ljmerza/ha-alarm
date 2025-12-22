@@ -26,4 +26,17 @@ export function useHomeAssistantEntities() {
   })
 }
 
+export function useHomeAssistantNotifyServices() {
+  const session = useAuthSessionQuery()
+  const isAuthenticated = session.data.isAuthenticated
+  const statusQuery = useHomeAssistantStatus()
+  const enabled = !!isAuthenticated && !!statusQuery.data?.configured && !!statusQuery.data?.reachable
+
+  return useQuery({
+    queryKey: queryKeys.homeAssistant.notifyServices,
+    queryFn: homeAssistantService.listNotifyServices,
+    enabled,
+  })
+}
+
 export default useHomeAssistantStatus

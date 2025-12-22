@@ -25,6 +25,10 @@ export const homeAssistantService = {
   async listEntities(): Promise<HomeAssistantEntity[]> {
     return api.getData<HomeAssistantEntity[]>('/api/alarm/home-assistant/entities/')
   },
+
+  async listNotifyServices(): Promise<string[]> {
+    return api.getData<string[]>('/api/alarm/home-assistant/notify-services/')
+  },
 }
 
 export default homeAssistantService
