@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { useAlarm } from '@/hooks/useAlarm'
 import { type AlarmStateType } from '@/lib/constants'
 import { cn } from '@/lib/utils'
+import { handleError } from '@/lib/errorHandler'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Modal } from '@/components/ui/modal'
@@ -76,8 +77,17 @@ export function AlarmPanel({ className }: AlarmPanelProps) {
         setShowKeypad(false)
         setMode('idle')
         setPendingArmState(null)
-      } catch {
-        // Error is handled by the store
+      } catch (error) {
+        // Categorize error and handle appropriately
+        const appError = handleError(error, { silent: true })
+
+        // For validation errors (wrong code), keep modal open so user can retry
+        // For other errors (network, server), show toast and close modal
+        if (appError.category !== 'validation') {
+          handleError(error)
+          handleCancel()
+        }
+        // Validation errors are shown inline via useAlarm().error
       }
     },
     [mode, pendingArmState, arm, disarm]
@@ -95,8 +105,9 @@ export function AlarmPanel({ className }: AlarmPanelProps) {
   const handleCancelArming = useCallback(async () => {
     try {
       await cancelArming()
-    } catch {
-      // Error is handled by the store
+    } catch (error) {
+      // Show error via toast
+      handleError(error)
     }
   }, [cancelArming])
 

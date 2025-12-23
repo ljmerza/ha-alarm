@@ -9,6 +9,7 @@ import { UIBootstrap } from '@/components/providers/UIBootstrap'
 import { Spinner } from '@/components/ui/spinner'
 import { useOnboardingStatusQuery } from '@/hooks/useOnboardingQueries'
 import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
+import { useGlobalQueryErrorHandler } from '@/hooks/useQueryErrorHandler'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const OnboardingPage = lazy(() => import('@/pages/OnboardingPage'))
@@ -38,6 +39,7 @@ const queryClient = new QueryClient({
 
 function AppContent() {
   useUIStore()
+  useGlobalQueryErrorHandler()
   const onboardingStatusQuery = useOnboardingStatusQuery()
   const onboardingRequired = onboardingStatusQuery.data?.onboardingRequired ?? null
   const onboardingLoading = onboardingStatusQuery.isLoading

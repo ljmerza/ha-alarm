@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Header } from './Header'
 import { AlarmRealtimeProvider } from '@/components/providers/AlarmRealtimeProvider'
+import { ConnectionStatusBanner } from '@/components/ui/ConnectionStatusBanner'
 
 export function AppShell() {
   return (
@@ -13,6 +14,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <ConnectionStatusBanner />
     </div>
   )
 }
