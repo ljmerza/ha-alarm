@@ -1,7 +1,8 @@
 import { Menu, Bell, User, LogOut, Moon, Sun, Monitor, House } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useUIStore } from '@/stores'
+import { useLayoutStore } from '@/stores/layoutStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { alarmService } from '@/services'
 import { queryKeys } from '@/types'
 import { useWebSocketStatus } from '@/hooks/useWebSocketStatus'
@@ -17,7 +18,8 @@ export function Header() {
   const currentUserQuery = useCurrentUserQuery()
   const user = currentUserQuery.data ?? null
   const isAuthenticated = sessionQuery.data.isAuthenticated
-  const { toggleSidebar, theme, setTheme, isMobile } = useUIStore()
+  const { toggleSidebar, isMobile } = useLayoutStore()
+  const { theme, setTheme } = useThemeStore()
 
   const alarmStateQuery = useQuery({
     queryKey: queryKeys.alarm.state,

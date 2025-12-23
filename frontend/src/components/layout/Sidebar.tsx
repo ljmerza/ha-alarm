@@ -8,7 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
-import { useUIStore } from '@/stores'
+import { useLayoutStore } from '@/stores/layoutStore'
 import { cn } from '@/lib/utils'
 import { Routes } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,7 @@ const navItems = [
 
 export function Sidebar() {
   const location = useLocation()
-  const { sidebarOpen, sidebarCollapsed, setSidebarCollapsed } = useUIStore()
+  const { sidebarOpen, sidebarCollapsed, setSidebarCollapsed } = useLayoutStore()
 
   if (!sidebarOpen) return null
 

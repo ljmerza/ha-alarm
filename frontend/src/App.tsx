@@ -2,10 +2,11 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Routes as AppRoutes } from '@/lib/constants'
-import { useUIStore } from '@/stores'
 import { AppShell, ProtectedRoute, SetupGate } from '@/components/layout'
 import { AppErrorBoundary } from '@/components/providers/AppErrorBoundary'
-import { UIBootstrap } from '@/components/providers/UIBootstrap'
+import { ThemeProvider } from '@/components/providers/ThemeProvider'
+import { LayoutBootstrap } from '@/components/providers/LayoutBootstrap'
+import { ModalProvider } from '@/components/modals'
 import { Spinner } from '@/components/ui/spinner'
 import { useOnboardingStatusQuery } from '@/hooks/useOnboardingQueries'
 import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
@@ -38,7 +39,6 @@ const queryClient = new QueryClient({
 })
 
 function AppContent() {
-  useUIStore()
   useGlobalQueryErrorHandler()
   const onboardingStatusQuery = useOnboardingStatusQuery()
   const onboardingRequired = onboardingStatusQuery.data?.onboardingRequired ?? null
@@ -51,7 +51,6 @@ function AppContent() {
 
   return (
     <>
-      <UIBootstrap />
       <Suspense fallback={<Spinner fullscreen size="lg" />}>
         <Routes>
           {/* Public routes */}
@@ -113,9 +112,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppErrorBoundary>
-          <AppContent />
-        </AppErrorBoundary>
+        <ThemeProvider>
+          <AppErrorBoundary>
+            <LayoutBootstrap />
+            <AppContent />
+            <ModalProvider />
+          </AppErrorBoundary>
+        </ThemeProvider>
       </BrowserRouter>
     </QueryClientProvider>
   )
