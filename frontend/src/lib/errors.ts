@@ -1,4 +1,6 @@
 import type { ApiError } from '@/types'
+import { isRecord } from '@/lib/typeGuards'
+import { getErrorMessage as getErrorMessageNew } from '@/types/errors'
 
 /**
  * Error categories for different handling strategies
@@ -30,10 +32,9 @@ export interface AppError {
  */
 export function isApiError(error: unknown): error is ApiError {
   return (
-    typeof error === 'object' &&
-    error !== null &&
+    isRecord(error) &&
     'message' in error &&
-    typeof (error as Record<string, unknown>).message === 'string'
+    typeof error.message === 'string'
   )
 }
 
@@ -172,21 +173,10 @@ export function categorizeError(error: unknown): AppError {
 
 /**
  * Get user-friendly error message (legacy compatibility)
+ * @deprecated Use getErrorMessage from @/types/errors instead
  */
 export function getErrorMessage(error: unknown): string | undefined {
   if (!error) return undefined
-
-  if (typeof error === 'string') return error
-
-  if (error instanceof Error) {
-    return error.message || undefined
-  }
-
-  if (typeof error !== 'object') return undefined
-
-  const asRecord = error as Record<string, unknown>
-  const detail = typeof asRecord.detail === 'string' ? asRecord.detail : undefined
-  const message = typeof asRecord.message === 'string' ? asRecord.message : undefined
-
-  return detail || message
+  const message = getErrorMessageNew(error, '')
+  return message || undefined
 }

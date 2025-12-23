@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
 import { AlarmState, AlarmStateLabels, UserRole } from '@/lib/constants'
 import type { AlarmStateType, UserRoleType } from '@/lib/constants'
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/types/errors'
 import type { AlarmCode, UpdateCodeRequest, User } from '@/types'
 import { useCodesQuery, useCreateCodeMutation, useUpdateCodeMutation, useUsersQuery } from '@/hooks/useCodesQueries'
+import { isCreateCodeTypeOption, type CreateCodeTypeOption } from '@/lib/typeGuards'
+import { getSelectValue } from '@/lib/formHelpers'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,8 +21,6 @@ import { FormField } from '@/components/ui/form-field'
 import { SectionCard } from '@/components/ui/section-card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { LoadingInline } from '@/components/ui/loading-inline'
-
-type CreateCodeTypeOption = 'permanent' | 'temporary'
 
 const ARMABLE_STATES: AlarmStateType[] = [
   AlarmState.ARMED_HOME,
@@ -349,7 +349,7 @@ function CodesPageContent() {
                   <Select
                     id="create-type"
                     value={createCodeType}
-                    onChange={(e) => setCreateCodeType(e.target.value as CreateCodeTypeOption)}
+                    onChange={(e) => setCreateCodeType(getSelectValue(e, isCreateCodeTypeOption, 'permanent'))}
                     disabled={createMutation.isPending}
                   >
                     <option value="permanent">Permanent</option>

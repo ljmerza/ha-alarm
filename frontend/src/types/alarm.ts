@@ -100,13 +100,32 @@ export interface DisarmRequest {
   code: string
 }
 
-// WebSocket Messages
-export interface AlarmWebSocketMessage {
-  type: 'alarm_state' | 'event' | 'countdown' | 'health'
-  timestamp: string
-  payload: AlarmStatePayload | AlarmEventPayload | CountdownPayload
-  sequence: number
-}
+// WebSocket Messages - Discriminated Union
+export type AlarmWebSocketMessage =
+  | {
+      type: 'alarm_state'
+      timestamp: string
+      payload: AlarmStatePayload
+      sequence: number
+    }
+  | {
+      type: 'event'
+      timestamp: string
+      payload: AlarmEventPayload
+      sequence: number
+    }
+  | {
+      type: 'countdown'
+      timestamp: string
+      payload: CountdownPayload
+      sequence: number
+    }
+  | {
+      type: 'health'
+      timestamp: string
+      payload: HealthPayload
+      sequence: number
+    }
 
 export interface AlarmStatePayload {
   state: AlarmStateSnapshot
@@ -125,4 +144,10 @@ export interface CountdownPayload {
   type: 'entry' | 'exit' | 'trigger'
   remainingSeconds: number
   totalSeconds: number
+}
+
+export interface HealthPayload {
+  status: 'healthy' | 'degraded' | 'unhealthy'
+  timestamp: string
+  details?: Record<string, unknown>
 }

@@ -1,5 +1,7 @@
 import { API_BASE_URL } from '@/lib/constants'
 import type { ApiError, PaginatedResponse } from '@/types'
+import { isRecord } from '@/lib/typeGuards'
+import { isApiErrorResponse, getApiErrorMessage } from '@/types/errors'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
@@ -137,30 +139,16 @@ class ApiClient {
     if (!response.ok) {
       const parsed = await response.json().catch(() => null)
       const error: ApiError = (() => {
-        if (parsed && typeof parsed === 'object') {
-          const asRecord = parsed as Record<string, unknown>
-          const detail = typeof asRecord.detail === 'string' ? asRecord.detail : undefined
-          const message = typeof asRecord.message === 'string' ? asRecord.message : detail
-          const fieldMessage = (() => {
-            if (message) return undefined
-            const nonField = asRecord.non_field_errors
-            if (Array.isArray(nonField) && typeof nonField[0] === 'string') {
-              return nonField[0]
-            }
-            for (const [key, value] of Object.entries(asRecord)) {
-              if (key === 'detail' || key === 'message') continue
-              if (Array.isArray(value) && typeof value[0] === 'string') {
-                return `${key}: ${value[0]}`
-              }
-            }
-            return undefined
-          })()
-          return {
-            message: message || fieldMessage || response.statusText || 'An error occurred',
-            code: typeof asRecord.code === 'string' ? asRecord.code : response.status.toString(),
-            details:
-              isPlainObject(asRecord.details) ? (asRecord.details as Record<string, string[]>) : undefined,
-          }
+        if (isApiErrorResponse(parsed)) {
+          const message = getApiErrorMessage(parsed)
+          const code = isRecord(parsed) && typeof parsed.code === 'string'
+            ? parsed.code
+            : response.status.toString()
+          const details = isRecord(parsed) && isRecord(parsed.details)
+            ? (parsed.details as Record<string, string[]>)
+            : undefined
+
+          return { message, code, details }
         }
         return {
           message: response.statusText || 'An error occurred',
@@ -170,13 +158,18 @@ class ApiClient {
       throw error
     }
 
-    // Handle 204 No Content
+    // Handle 204 No Content - return undefined for empty responses
+    // Note: This may cause type issues if T expects an object. Callers should handle this.
     if (response.status === 204) {
-      return {} as T
+      return undefined as T
     }
 
     const json = await response.json()
-    return transformKeysDeep(json, toCamelCaseKey) as T
+    const transformed = transformKeysDeep(json, toCamelCaseKey)
+
+    // Type safety note: We trust that the API returns data matching type T
+    // For additional safety, callers can use validation functions
+    return transformed as T
   }
 
   async get<T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {

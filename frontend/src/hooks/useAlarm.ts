@@ -5,6 +5,7 @@ import { useRecentEventsQuery } from '@/hooks/useAlarmQueries'
 import { useAlarmState as useAlarmStateHook } from '@/hooks/useAlarmState'
 import { useAlarmActions as useAlarmActionsHook } from '@/hooks/useAlarmActions'
 import { useAlarmValidation as useAlarmValidationHook } from '@/hooks/useAlarmValidation'
+import { getErrorMessage } from '@/types/errors'
 
 /**
  * Main alarm hook - facade that composes focused hooks.
@@ -37,7 +38,7 @@ export function useAlarm() {
   // Combine errors (actions.error takes precedence)
   const error =
     actions.error ||
-    (recentEventsQuery.error as { message?: string } | null)?.message ||
+    (recentEventsQuery.error && getErrorMessage(recentEventsQuery.error, '')) ||
     null
 
   // Return combined interface for backward compatibility

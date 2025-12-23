@@ -12,7 +12,8 @@ import { DatalistInput } from '@/components/ui/datalist-input'
 import { HelpTip } from '@/components/ui/help-tip'
 import { IconButton } from '@/components/ui/icon-button'
 import { Pill } from '@/components/ui/pill'
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/types/errors'
+import { isRecord } from '@/lib/typeGuards'
 import { AlarmState, AlarmStateLabels, type AlarmStateType, UserRole } from '@/lib/constants'
 import type { AlarmSettingsProfile } from '@/types'
 import { useAlarmSettingsQuery } from '@/hooks/useAlarmQueries'
@@ -695,9 +696,9 @@ function toggleState(states: AlarmStateType[], state: AlarmStateType): AlarmStat
 }
 
 function normalizeStateOverrides(value: unknown): Record<string, Record<string, unknown>> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  if (!isRecord(value)) return {}
   const out: Record<string, Record<string, unknown>> = {}
-  for (const [rawKey, rawOverride] of Object.entries(value as Record<string, unknown>)) {
+  for (const [rawKey, rawOverride] of Object.entries(value)) {
     if (!rawKey) continue
     const normalizedKey = rawKey.includes('_')
       ? rawKey
@@ -705,8 +706,8 @@ function normalizeStateOverrides(value: unknown): Record<string, Record<string, 
           .replace(/([A-Z])/g, '_$1')
           .replace(/__/g, '_')
           .toLowerCase()
-    if (!rawOverride || typeof rawOverride !== 'object' || Array.isArray(rawOverride)) continue
-    out[normalizedKey] = rawOverride as Record<string, unknown>
+    if (!isRecord(rawOverride)) continue
+    out[normalizedKey] = rawOverride
   }
   return out
 }

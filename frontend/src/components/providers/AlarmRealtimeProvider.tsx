@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { wsManager } from '@/services'
-import type { AlarmEvent, AlarmStateSnapshot, CountdownPayload, AlarmWebSocketMessage, WebSocketStatus } from '@/types'
+import type { AlarmEvent, AlarmWebSocketMessage, WebSocketStatus } from '@/types'
 import { queryKeys } from '@/types'
 import { useAuthSessionQuery } from '@/hooks/useAuthQueries'
+import { isAlarmStatePayload, isAlarmEventPayload, isCountdownPayload } from '@/lib/typeGuards'
 
 let unsubscribeMessages: (() => void) | null = null
 let unsubscribeStatus: (() => void) | null = null
@@ -44,21 +45,35 @@ export function AlarmRealtimeProvider() {
     if (!unsubscribeMessages) {
       unsubscribeMessages = wsManager.onMessage((message: AlarmWebSocketMessage) => {
         switch (message.type) {
-          case 'alarm_state':
-            queryClient.setQueryData(
-              queryKeys.alarm.state,
-              (message.payload as { state: AlarmStateSnapshot }).state
-            )
+          case 'alarm_state': {
+            // Discriminated union narrows payload type, but validate at runtime for safety
+            if (!isAlarmStatePayload(message.payload)) {
+              console.error('Invalid alarm_state payload', message.payload)
+              break
+            }
+            queryClient.setQueryData(queryKeys.alarm.state, message.payload.state)
             break
-          case 'event':
+          }
+          case 'event': {
+            if (!isAlarmEventPayload(message.payload)) {
+              console.error('Invalid event payload', message.payload)
+              break
+            }
             queryClient.setQueryData(queryKeys.events.recent, (prev) =>
-              upsertRecentEvent(prev as AlarmEvent[] | undefined, (message.payload as { event: AlarmEvent }).event)
+              upsertRecentEvent(prev as AlarmEvent[] | undefined, message.payload.event)
             )
             break
-          case 'countdown':
-            queryClient.setQueryData(queryKeys.alarm.countdown, message.payload as CountdownPayload)
+          }
+          case 'countdown': {
+            if (!isCountdownPayload(message.payload)) {
+              console.error('Invalid countdown payload', message.payload)
+              break
+            }
+            queryClient.setQueryData(queryKeys.alarm.countdown, message.payload)
             break
+          }
           case 'health':
+            // Health messages received but not processed yet
             break
         }
       })

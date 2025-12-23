@@ -156,17 +156,21 @@ function handleUnknownError(appError: AppError, options: ErrorHandlerOptions) {
 
 /**
  * Create a wrapped async function that automatically handles errors
+ * Returns a function with the same signature as the input
  */
-export function withErrorHandling<T extends (...args: unknown[]) => Promise<unknown>>(
-  fn: T,
+export function withErrorHandling<
+  TArgs extends unknown[],
+  TReturn
+>(
+  fn: (...args: TArgs) => Promise<TReturn>,
   options: ErrorHandlerOptions = {}
-): T {
-  return (async (...args: Parameters<T>) => {
+): (...args: TArgs) => Promise<TReturn> {
+  return async (...args: TArgs): Promise<TReturn> => {
     try {
       return await fn(...args)
     } catch (error) {
       handleError(error, options)
       throw error // Re-throw for component-level handling if needed
     }
-  }) as T
+  }
 }

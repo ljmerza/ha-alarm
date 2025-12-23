@@ -4,6 +4,7 @@ import { AlarmState } from '@/lib/constants'
 import type { AlarmStateType } from '@/lib/constants'
 import { alarmService } from '@/services'
 import { queryKeys } from '@/types'
+import { getErrorMessage } from '@/types/errors'
 
 export interface UseAlarmActionsReturn {
   // Core actions
@@ -65,9 +66,9 @@ export function useAlarmActions(): UseAlarmActionsReturn {
     armMutation.isPending || disarmMutation.isPending || cancelArmingMutation.isPending
 
   const error =
-    (armMutation.error as { message?: string } | null)?.message ||
-    (disarmMutation.error as { message?: string } | null)?.message ||
-    (cancelArmingMutation.error as { message?: string } | null)?.message ||
+    (armMutation.error && getErrorMessage(armMutation.error, '')) ||
+    (disarmMutation.error && getErrorMessage(disarmMutation.error, '')) ||
+    (cancelArmingMutation.error && getErrorMessage(cancelArmingMutation.error, '')) ||
     null
 
   // Core actions

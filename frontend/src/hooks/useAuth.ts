@@ -9,6 +9,7 @@ import {
   useLogoutMutation,
   useVerify2FAMutation,
 } from '@/hooks/useAuthQueries'
+import { getErrorMessage } from '@/types/errors'
 
 export function useAuth() {
   const sessionQuery = useAuthSessionQuery()
@@ -30,10 +31,9 @@ export function useAuth() {
       verify2FAMutation.error,
     ]
     for (const err of errors) {
-      if (err instanceof Error && err.message) return err.message
-      if (err && typeof err === 'object') {
-        const maybe = err as { message?: unknown }
-        if (typeof maybe.message === 'string' && maybe.message) return maybe.message
+      if (err) {
+        const message = getErrorMessage(err, '')
+        if (message) return message
       }
     }
     return null

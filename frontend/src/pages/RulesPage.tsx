@@ -19,9 +19,12 @@ import { Pill } from '@/components/ui/pill'
 import { DatalistInput } from '@/components/ui/datalist-input'
 import { EmptyState } from '@/components/ui/empty-state'
 import { IconButton } from '@/components/ui/icon-button'
-import { getErrorMessage } from '@/lib/errors'
 import { useEntitiesQuery, useRulesQuery, useSyncEntitiesMutation, useRunRulesMutation, useSaveRuleMutation, useDeleteRuleMutation } from '@/hooks/useRulesQueries'
 import { X } from 'lucide-react'
+import { getErrorMessage } from '@/types/errors'
+import { isRecord, isWhenOperator, isAlarmArmMode, type WhenOperator, type AlarmArmMode } from '@/lib/typeGuards'
+import { parseRuleDefinition, type RuleDefinition } from '@/types/ruleDefinition'
+import { getSelectValue } from '@/lib/formHelpers'
 
 const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'trigger', label: 'Trigger' },
@@ -31,16 +34,12 @@ const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'escalate', label: 'Escalate' },
 ]
 
-type WhenOperator = 'all' | 'any'
-
 type ConditionRow = {
   id: string
   entityId: string
   equals: string
   negate: boolean
 }
-
-type AlarmArmMode = 'armed_home' | 'armed_away' | 'armed_night' | 'armed_vacation'
 
 type ActionRow =
   | { id: string; type: 'alarm_disarm' }
@@ -64,10 +63,6 @@ function parseEntityIds(value: string): string[] {
 
 function uniqueId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
 function countThenActions(definition: unknown): number {
@@ -248,9 +243,11 @@ export function RulesPage() {
     setEntityIdsText(rule.entityIds.join('\n'))
 
     try {
-      const def = rule.definition as unknown
-      if (!def || typeof def !== 'object' || Array.isArray(def)) return
-      const asObj = def as Record<string, unknown>
+      // Use parseRuleDefinition for validation
+      const parsedDef = parseRuleDefinition(rule.definition)
+      if (!parsedDef) return
+
+      const asObj = parsedDef
 
       const nextConditions: ConditionRow[] = []
       const addEntityState = (node: unknown, negate = false) => {
@@ -275,10 +272,10 @@ export function RulesPage() {
 
       if (
         isRecord(baseWhen) &&
-        (baseWhen.op === 'all' || baseWhen.op === 'any') &&
+        isWhenOperator(baseWhen.op) &&
         Array.isArray(baseWhen.children)
       ) {
-        setWhenOperator(baseWhen.op as WhenOperator)
+        setWhenOperator(baseWhen.op)
         for (const child of baseWhen.children) {
           if (isRecord(child) && child.op === 'not') {
             addEntityState(child.child, true)
@@ -303,13 +300,13 @@ export function RulesPage() {
           const type = action.type
           if (type === 'alarm_disarm') nextActions.push({ id: uniqueId(), type: 'alarm_disarm' })
           if (type === 'alarm_trigger') nextActions.push({ id: uniqueId(), type: 'alarm_trigger' })
-          if (type === 'alarm_arm' && typeof action.mode === 'string') {
-            nextActions.push({ id: uniqueId(), type: 'alarm_arm', mode: action.mode as AlarmArmMode })
+          if (type === 'alarm_arm' && typeof action.mode === 'string' && isAlarmArmMode(action.mode)) {
+            nextActions.push({ id: uniqueId(), type: 'alarm_arm', mode: action.mode })
           }
           if (type === 'ha_call_service') {
             const target = isRecord(action.target) ? action.target : null
             const targetEntityIds = Array.isArray(target?.entity_ids)
-              ? (target?.entity_ids as unknown[]).map(String).join(', ')
+              ? target.entity_ids.map(String).join(', ')
               : ''
             nextActions.push({
               id: uniqueId(),
@@ -338,14 +335,15 @@ export function RulesPage() {
         return
       }
 
-      let parsedDefinition: Record<string, unknown>
+      let parsedDefinition: RuleDefinition
       try {
         const parsed = JSON.parse(definitionText)
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-          setError('Definition must be a JSON object.')
+        const validated = parseRuleDefinition(parsed)
+        if (!validated) {
+          setError('Definition must be a valid rule structure with "when" and "then" properties.')
           return
         }
-        parsedDefinition = parsed as Record<string, unknown>
+        parsedDefinition = validated
       } catch {
         setError('Definition is not valid JSON.')
         return
@@ -581,7 +579,7 @@ export function RulesPage() {
 	                    <Select
 	                      size="sm"
 	                      value={whenOperator}
-	                      onChange={(e) => setWhenOperator(e.target.value as WhenOperator)}
+	                      onChange={(e) => setWhenOperator(getSelectValue(e, isWhenOperator, 'all'))}
 	                    >
 	                      <option value="all">All (AND)</option>
 	                      <option value="any">Any (OR)</option>
@@ -775,7 +773,7 @@ export function RulesPage() {
 	                              size="sm"
 	                              value={a.mode}
 	                              onChange={(e) => {
-	                                const mode = e.target.value as AlarmArmMode
+	                                const mode = getSelectValue(e, isAlarmArmMode, 'armed_away')
 	                                setActions((prev) =>
 	                                  prev.map((row) => (row.id === a.id ? { ...row, mode } : row)) as ActionRow[]
                                 )
