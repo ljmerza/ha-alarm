@@ -1,5 +1,7 @@
 export { useAuth, useRequireAuth, useLogin, default as auth } from './useAuth'
 export { useAlarm, useAlarmState, default as alarm } from './useAlarm'
+export { useAlarmActions } from './useAlarmActions'
+export { useAlarmValidation } from './useAlarmValidation'
 export { useWebSocketStatus, default as webSocketStatus } from './useWebSocketStatus'
 export { useHomeAssistantStatus, useHomeAssistantEntities } from './useHomeAssistant'
 export {
