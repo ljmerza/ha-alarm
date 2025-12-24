@@ -11,7 +11,7 @@ function isAdmin(role: string | undefined): boolean {
 
 export function useSettingsProfilesQuery() {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   return useQuery({
     queryKey: queryKeys.alarm.settingsProfiles,
     queryFn: alarmService.getSettingsProfiles,
@@ -21,7 +21,7 @@ export function useSettingsProfilesQuery() {
 
 export function useSettingsProfileDetailQuery(profileId: number | null) {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   return useQuery({
     queryKey: ['alarm', 'settings', 'profiles', 'detail', profileId] as const,
     queryFn: () => alarmService.getSettingsProfile(profileId as number),
@@ -78,7 +78,7 @@ export function useActivateSettingsProfileMutation() {
 export function useSystemConfigQuery() {
   const session = useAuthSessionQuery()
   const currentUser = useCurrentUserQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   const isEnabled = isAuthenticated && isAdmin(currentUser.data?.role)
   return useQuery({
     queryKey: queryKeys.systemConfig.all,

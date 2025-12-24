@@ -5,7 +5,7 @@ import { useAuthSessionQuery } from '@/hooks/useAuthQueries'
 
 export function useHomeAssistantStatus() {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   return useQuery({
     queryKey: queryKeys.homeAssistant.status,
     queryFn: homeAssistantService.getStatus,
@@ -15,7 +15,7 @@ export function useHomeAssistantStatus() {
 
 export function useHomeAssistantEntities() {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   const statusQuery = useHomeAssistantStatus()
   const enabled = !!isAuthenticated && !!statusQuery.data?.configured && !!statusQuery.data?.reachable
 
@@ -28,7 +28,7 @@ export function useHomeAssistantEntities() {
 
 export function useHomeAssistantNotifyServices() {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   const statusQuery = useHomeAssistantStatus()
   const enabled = !!isAuthenticated && !!statusQuery.data?.configured && !!statusQuery.data?.reachable
 

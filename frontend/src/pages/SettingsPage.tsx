@@ -163,6 +163,19 @@ export function SettingsPage() {
 
   const loadError = getErrorMessage(settingsQuery.error) || null
 
+  // DEBUG: Log the error object to understand its structure
+  if (settingsQuery.error) {
+    console.error('[SettingsPage] Query error detected:', {
+      error: settingsQuery.error,
+      errorType: typeof settingsQuery.error,
+      errorConstructor: settingsQuery.error?.constructor?.name,
+      errorKeys: Object.keys(settingsQuery.error),
+      errorMessage: (settingsQuery.error as any)?.message,
+      errorStringified: JSON.stringify(settingsQuery.error, null, 2),
+      extractedMessage: loadError,
+    })
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Settings" />

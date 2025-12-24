@@ -5,7 +5,7 @@ import { useAuthSessionQuery } from '@/hooks/useAuthQueries'
 
 export function useAlarmStateQuery() {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   return useQuery({
     queryKey: queryKeys.alarm.state,
     queryFn: alarmService.getState,
@@ -15,7 +15,7 @@ export function useAlarmStateQuery() {
 
 export function useAlarmSettingsQuery() {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   return useQuery({
     queryKey: queryKeys.alarm.settings,
     queryFn: alarmService.getSettings,
@@ -25,7 +25,7 @@ export function useAlarmSettingsQuery() {
 
 export function useSensorsQuery() {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   return useQuery({
     queryKey: queryKeys.sensors.all,
     queryFn: sensorsService.getSensors,
@@ -35,7 +35,7 @@ export function useSensorsQuery() {
 
 export function useRecentEventsQuery(limit = 10) {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   return useQuery({
     queryKey: queryKeys.events.recent,
     queryFn: () => alarmService.getRecentEvents(limit),

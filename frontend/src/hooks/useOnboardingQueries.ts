@@ -13,7 +13,7 @@ export function useOnboardingStatusQuery() {
 
 export function useSetupStatusQuery() {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
   return useQuery({
     queryKey: queryKeys.onboarding.setupStatus,
     queryFn: onboardingService.setupStatus,

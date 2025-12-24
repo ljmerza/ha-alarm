@@ -1,277 +1,536 @@
-# Home Assistant Alarm ↔ Alarm App Sync (Planning)
+# Home Assistant Alarm Integration via Webhook (Planning)
 
 ## Goals
 
-- Two-way sync between a Home Assistant `alarm_control_panel.*` entity and this app’s alarm state machine.
-- Default behavior: **Home Assistant is authoritative**, but the user can switch to “local authoritative” (or disable sync) via settings.
-- Prevent sync loops (outbound updates echoing back inbound).
-- If Home Assistant is offline/unreachable:
-  - UI shows **offline**.
-  - Users can still arm/disarm/trigger locally.
-  - Local changes are queued and sync to Home Assistant once it’s reachable again.
-- Use Home Assistant’s `last_updated` timestamp to resolve conflicts.
+- **One-way push**: This app's alarm state machine is authoritative; Home Assistant receives state updates via webhook.
+- **Real-time updates**: On every local state transition, POST the new state to a configured HA webhook URL.
+- **Simple integration**: Users configure a webhook in HA and paste the URL into app settings.
+- **Best-effort delivery**: Retry webhook calls on failure with exponential backoff (optional).
+- **Startup state push**: On app startup, push current state to HA so it recovers from restarts/missed updates.
+- **HA as observer/controller**: HA can display state and trigger automations, and can control the alarm by calling this app's API endpoints.
 
 ## Non-goals (v1)
 
-- Home Assistant WebSocket subscription (`state_changed`) for push-style inbound updates.
-- Multi-alarm support (one HA alarm entity per active settings profile only).
-- Exact parity with every HA alarm feature (custom arming modes beyond this app’s states).
+- Bidirectional sync (HA is not authoritative; it only observes and controls via API).
+- Conflict resolution, timestamp comparisons, or pending queues.
+- Polling HA for state changes.
+- Multi-alarm support (one webhook URL per active settings profile only).
 
 ## Current repo context
 
 - HA connectivity exists via `backend/alarm/home_assistant.py` + `backend/alarm/gateways/home_assistant.py`.
 - Frontend already shows HA reachable/offline in `SystemStatusCard` from `/api/alarm/home-assistant/status/`.
 - Local transitions are handled by `backend/alarm/state_machine/*` and are triggered by API endpoints under `backend/alarm/views/*`.
-- There is an existing pattern for “call HA on local state changes” (notifications) scheduled via `transaction.on_commit` and run as a Celery task.
+- There is an existing pattern for "call HA on local state changes" (notifications) scheduled via `transaction.on_commit` and run as a Celery task.
 
 ## Proposed user-facing behavior
 
 ### Onboarding
 
-- Ask for Home Assistant alarm entity id, e.g. `alarm_control_panel.home`.
-- Save it to the active `AlarmSettingsProfile` settings entries.
-- Offer a toggle: enable/disable alarm sync (default off, or on if entity is provided—pick one and stay consistent).
+- Ask if the user wants to integrate with Home Assistant.
+- If yes:
+  1. Ask for an **entity name** (e.g., "Home Alarm", "Office Alarm") - used for display in HA and logs.
+  2. Provide instructions:
+     - In Home Assistant, create a webhook automation (Automation → New → Webhook trigger).
+     - Copy the webhook URL (e.g., `http://homeassistant.local:8123/api/webhook/alarm_state_webhook_id`).
+     - Paste it into the app's settings.
+     - Optionally create an `input_select.alarm_app_state` helper to mirror the state visually in HA.
+- Save the entity name and webhook URL to the active `AlarmSettingsProfile` settings entries.
 
 ### Settings
 
-Provide a “Home Assistant Alarm Sync” section:
+Provide a "Home Assistant Integration" section:
 
-- `Enabled` (boolean)
-- `HA authoritative` (boolean; default true)
-- `HA alarm entity id` (string, required when enabled)
-- Optional: `poll_seconds` (integer; default e.g. 5–15)
+- `Enabled` (boolean; default false)
+- `Entity name` (string; e.g., "Home Alarm" - user can rename anytime)
+- `Webhook URL` (string; required when enabled)
+- `Retry on failure` (boolean; default true)
+- Optional: `Timeout seconds` (integer; default 5)
 
 ### Dashboard / Status
 
 - Show:
-  - HA connection (already present).
-  - Alarm sync: `Disabled` / `Enabled` + `Pending local changes` (if any) + last push error (if any).
+  - HA integration: `Disabled` / `Enabled`
+  - If enabled: Last webhook push status (`Success` / `Failed: <error>` / `Pending`)
+  - Last successful push timestamp
 
 ## State mapping
 
-### HA → Local mapping
+### Local → HA webhook payload
 
-- `disarmed` → `disarmed`
-- `arming` → `arming`
-- `pending` → `pending`
-- `triggered` → `triggered`
-- `armed_home` → `armed_home`
-- `armed_away` → `armed_away`
-- `armed_night` → `armed_night`
-- `armed_custom_bypass` → `armed_vacation` (chosen mapping)
+On each state transition, POST a JSON payload to the webhook URL:
 
-Ignore (do not transition, but record last seen):
+```json
+{
+  "entity_name": "Home Alarm",
+  "state": "armed_away",
+  "previous_state": "arming",
+  "changed_at": "2025-12-23T10:30:45.123456Z",
+  "triggered_by": "user",
+  "metadata": {
+    "settings_profile_id": 1,
+    "transition_id": "abc123"
+  }
+}
+```
 
-- `unknown`, `unavailable`, empty states, or anything unrecognized.
+The `entity_name` allows HA automations to identify which alarm sent the update (useful for multi-location setups or clearer logging).
 
-### Local → HA mapping (service calls)
+**State values:**
+- `disarmed`
+- `arming`
+- `pending`
+- `triggered`
+- `armed_home`
+- `armed_away`
+- `armed_night`
+- `armed_vacation`
 
-Target domain: `alarm_control_panel`
+### HA-side setup (user's responsibility)
 
-- `disarmed` → `alarm_disarm`
-- `armed_home` → `alarm_arm_home`
-- `armed_away` → `alarm_arm_away`
-- `armed_night` → `alarm_arm_night`
-- `armed_vacation` → `alarm_arm_custom_bypass`
-- `triggered` (optional) → `alarm_trigger` (only if HA entity supports it)
+**Option 1: Update an input_select helper**
 
-Notes:
-- HA service calls require a `target: { entity_id: <entity_id> }`.
-- HA disarm often supports `service_data: { code: "...." }`. Decide whether to send codes (likely “no”; rely on HA-side auth/token).
+Create `input_select.alarm_app_state` in HA with options matching the states above. Webhook automation action:
 
-## Loop prevention
+```yaml
+service: input_select.select_option
+target:
+  entity_id: input_select.alarm_app_state
+data:
+  option: "{{ trigger.json.state }}"
+```
 
-When applying HA → local transitions, tag them:
+**Option 2: Trigger automations directly**
 
-- `reason = "ha_sync"`
-- `metadata = { "origin": "home_assistant", "ha_entity_id": "...", "ha_last_updated": "...", "ha_state": "..." }`
+Use conditions in the webhook automation to trigger actions based on `trigger.json.state`:
 
-Outbound sync must **skip** any local transitions whose origin is Home Assistant (reason/metadata check), so we don’t echo.
+```yaml
+trigger:
+  - platform: webhook
+    webhook_id: alarm_state_webhook_id
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.json.state == 'triggered' }}"
+        sequence:
+          - service: notify.mobile_app
+            data:
+              message: "Alarm triggered!"
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.json.state == 'armed_away' }}"
+        sequence:
+          - service: light.turn_off
+            target:
+              entity_id: all
+```
 
-## Conflict resolution (timestamp-based)
+**Controlling the alarm from HA:**
 
-Canonical inbound compare field: **Home Assistant `last_updated`**.
+Users can call this app's API endpoints from HA automations/scripts:
 
-We need three timestamps:
+```yaml
+service: rest_command.alarm_arm_away
+data: {}
+```
 
-- `ha_last_updated` (from HA state payload)
-- `local_changed_at` (this app’s `AlarmStateSnapshot.entered_at`)
-- `pending_local_changed_at` (when we last changed locally while HA was offline/unreachable)
+Where `rest_command.alarm_arm_away` is configured in HA's `configuration.yaml`:
 
-Rules when HA is reachable:
-
-1) If there is a pending local change:
-   - If `ha_last_updated >= pending_local_changed_at`: HA wins → drop pending, adopt HA state locally.
-   - If `pending_local_changed_at > ha_last_updated`: local wins → push pending state to HA.
-2) If there is no pending local change:
-   - If `ha_last_updated > local_changed_at`: adopt HA state locally.
-   - Else: no-op.
-
-Tie-breaking:
-
-- On exact equality, prefer HA (avoids flapping when clocks differ slightly and HA updates are coalesced).
-
-Clock skew:
-
-- Accept small skew; optionally add a tolerance window (e.g. 1–2s) before deciding.
-
-## Offline handling and queuing
-
-### Desired behavior
-
-- If HA is unreachable:
-  - The app continues to transition locally.
-  - The latest local target state is stored as `pending_local_state` (overwrite older pending; only the newest matters).
-  - UI displays HA offline and “pending sync”.
-
-### On reconnect
-
-- The next sync attempt runs conflict rules and either:
-  - applies HA → local, or
-  - pushes local → HA, then clears pending on success.
+```yaml
+rest_command:
+  alarm_arm_away:
+    url: "http://alarm-app.local/api/alarm/arm/away/"
+    method: POST
+    headers:
+      Authorization: "Bearer <app_api_token>"
+      Content-Type: "application/json"
+```
 
 ## Backend design
 
 ### Settings (profile setting)
 
-Add `home_assistant_alarm_sync` to `backend/alarm/settings_registry.py` (JSON):
+Add `home_assistant_integration` to `backend/alarm/settings_registry.py` (JSON):
 
 ```json
 {
   "enabled": false,
-  "ha_authoritative": true,
-  "entity_id": "alarm_control_panel.home",
-  "poll_seconds": 10
+  "entity_name": "Home Alarm",
+  "webhook_url": "",
+  "retry_on_failure": true,
+  "timeout_seconds": 5
 }
 ```
 
 Expose it in `backend/alarm/serializers/alarm.py` so the frontend can read/update it through existing settings profile endpoints.
 
-### Sync runtime state (new model)
+### Webhook push task
 
-Add a model to track sync bookkeeping, per active settings profile:
+Create a Celery task in `backend/alarm/tasks.py`:
+
+```python
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def push_alarm_state_to_home_assistant(
+    self,
+    settings_profile_id: int,
+    state: str,
+    previous_state: str,
+    changed_at: str,
+    triggered_by: str,
+    transition_id: str
+):
+    """
+    POST alarm state to HA webhook.
+
+    Retries on failure with exponential backoff if retry_on_failure is enabled.
+    """
+    # Load settings (includes entity_name, webhook_url, etc.)
+    # Build payload with entity_name, state, previous_state, changed_at, triggered_by, metadata
+    # POST to webhook_url with timeout
+    # On success: log, update last_push_success_at
+    # On failure: log error, retry if enabled, update last_push_error
+```
+
+**Tracking last push status (optional model):**
+
+Add a simple model to track webhook push status per settings profile (for UI display):
 
 - `settings_profile` (FK, unique)
-- `ha_entity_id` (string, denormalized for debugging)
-- `last_seen_ha_state` (string)
-- `last_seen_ha_last_updated` (datetime)
-- `pending_local_state` (string/null)
-- `pending_local_changed_at` (datetime/null)
+- `webhook_url` (string, denormalized for debugging)
 - `last_push_attempt_at` (datetime/null)
 - `last_push_success_at` (datetime/null)
 - `last_push_error` (text/null)
+- `last_pushed_state` (string/null)
 
-This keeps API responses fast and enables UI display of “pending” and errors without re-checking HA.
+This keeps API responses fast and enables UI display of push status without checking task results.
 
-### HA API additions (gateway)
+### Where to trigger the webhook push
 
-Add a gateway method to fetch one entity state + timestamp:
+In the state machine transition handler (likely `backend/alarm/state_machine/manager.py` or similar), after a successful transition:
 
-- `get_entity_state(entity_id) -> { state: str, last_updated: datetime, attributes?: dict }`
+```python
+from django.db import transaction
 
-Implementation can use HA REST:
-- `GET /api/states/<entity_id>`
+def transition_to_state(state, triggered_by, metadata):
+    # ... perform transition ...
 
-### Use case: `sync_alarm_with_home_assistant`
+    # After commit, push to HA webhook if enabled
+    transaction.on_commit(lambda: push_alarm_state_to_home_assistant.delay(
+        settings_profile_id=current_profile.id,
+        state=new_state,
+        previous_state=old_state,
+        changed_at=snapshot.entered_at.isoformat(),
+        triggered_by=triggered_by,
+        transition_id=transition_id
+    ))
+```
 
-Create `backend/alarm/use_cases/home_assistant_alarm_sync.py`:
+**Skip webhook push for certain transitions:**
 
-Inputs:
-- current local snapshot
-- sync config (enabled, entity_id, ha_authoritative, poll_seconds)
-- HA gateway
-- current time
+Optionally, allow metadata to skip webhook push (e.g., if in the future we do accept inbound HA calls, we wouldn't echo back).
 
-Outputs:
-- possibly updated local snapshot
-- updated sync runtime state
-- flags for UI (pending, last error, last seen timestamps)
+### Startup state push
 
-This use case should:
-- short-circuit if sync disabled or missing entity id
-- handle HA unavailable (record offline + return)
-- apply conflict resolution rules
-- invoke either:
-  - state machine transition (HA → local), or
-  - enqueue outbound task (local → HA), or
-  - no-op
+On app startup, push the current alarm state to HA webhook to ensure HA has the correct state after:
+- HA restarts (missed webhooks while HA was down)
+- App restarts (HA might have stale state)
+- Network issues (missed webhooks)
 
-### Where sync runs (inbound path)
+**Implementation options:**
 
-Pick one or both:
+**Option A: Django AppConfig.ready() (recommended)**
 
-1) **Read-time sync**: call the use case during `GET /api/alarm/state/`.
-   - Pros: no extra infrastructure.
-   - Cons: sync only happens when someone loads/refreshes UI; adds latency to the endpoint.
+In `backend/alarm/apps.py`:
 
-2) **Periodic sync**: a Celery beat task (or management command scheduled by cron) polls HA regularly.
-   - Pros: up-to-date even without UI open.
-   - Cons: needs worker/beat to be running.
+```python
+from django.apps import AppConfig
 
-Recommended: implement read-time sync first; add periodic later if needed.
+class AlarmConfig(AppConfig):
+    name = 'alarm'
 
-### Outbound sync (task + retries)
+    def ready(self):
+        # Import here to avoid circular imports
+        from django.db import connection
 
-Create a Celery task:
+        # Only run if database is ready (not during migrations)
+        if connection.ensure_connection():
+            from alarm.tasks import push_current_state_to_home_assistant_on_startup
+            # Delay slightly to ensure Celery is ready
+            push_current_state_to_home_assistant_on_startup.apply_async(countdown=5)
+```
 
-- `push_alarm_state_to_home_assistant(settings_profile_id, desired_state, desired_changed_at, correlation_id)`
+**Option B: Management command**
 
-Behavior:
-- ensure HA available
-- call HA service mapped from desired state
-- on success: clear pending, record timestamps
-- on failure: keep pending, record error, retry with backoff
+Create `backend/alarm/management/commands/push_ha_state.py`:
 
-Correlation id:
-- store in runtime state and in local event metadata if helpful; mainly for debugging.
+```python
+from django.core.management.base import BaseCommand
+from alarm.tasks import push_current_state_to_home_assistant
+
+class Command(BaseCommand):
+    help = 'Push current alarm state to Home Assistant webhook'
+
+    def handle(self, *args, **options):
+        push_current_state_to_home_assistant()
+        self.stdout.write(self.style.SUCCESS('State pushed to HA webhook'))
+```
+
+Call from container entrypoint or systemd service after app starts.
+
+**Startup push task:**
+
+```python
+@shared_task
+def push_current_state_to_home_assistant_on_startup():
+    """
+    Push current alarm state to HA webhook on app startup.
+
+    This ensures HA has the correct state after restarts.
+    """
+    from alarm.models import AlarmSettingsProfile, AlarmStateSnapshot
+
+    for profile in AlarmSettingsProfile.objects.filter(is_active=True):
+        settings = profile.get_setting('home_assistant_integration')
+        if not settings or not settings.get('enabled'):
+            continue
+
+        snapshot = AlarmStateSnapshot.objects.filter(
+            settings_profile=profile
+        ).order_by('-entered_at').first()
+
+        if snapshot:
+            push_alarm_state_to_home_assistant.delay(
+                settings_profile_id=profile.id,
+                state=snapshot.state,
+                previous_state=None,  # Unknown on startup
+                changed_at=snapshot.entered_at.isoformat(),
+                triggered_by='startup_sync',
+                transition_id=f'startup_{profile.id}'
+            )
+```
 
 ## Frontend design
 
 ### Types + services
 
-- Extend `AlarmSettingsProfile` typing to include `homeAssistantAlarmSync`.
-- Add UI form controls in `SettingsPage` (pattern used by `home_assistant_notify`).
-- Extend onboarding flow to collect and persist the entity id + enabled toggle.
+- Extend `AlarmSettingsProfile` typing to include `homeAssistantIntegration`:
+  ```typescript
+  interface HomeAssistantIntegration {
+    enabled: boolean;
+    entityName: string;
+    webhookUrl: string;
+    retryOnFailure: boolean;
+    timeoutSeconds: number;
+  }
+  ```
+- Add UI form controls in `SettingsPage`:
+  - Entity name input (text field, e.g., "Home Alarm")
+  - Webhook URL input (text field with validation)
+- Provide onboarding step to collect entity name and webhook URL.
 
 ### Status display
 
 Extend `SystemStatusCard` to show:
-- Sync enabled/disabled
-- If enabled and HA offline: “pending sync” if there are local pending changes
-- Last sync error (if any)
+- Integration enabled/disabled
+- If enabled:
+  - Last push: `Success (2 minutes ago)` / `Failed: Connection timeout` / `Pending`
+  - Show retry status if applicable
+
+### Input validation
+
+**Entity name:**
+- Required when integration is enabled
+- Min 1 character, max 50 characters
+- Alphanumeric, spaces, and basic punctuation allowed
+
+**Webhook URL:**
+
+Client-side validation:
+- Must be a valid URL
+- Should start with `http://` or `https://`
+- Should contain `/api/webhook/`
+
+Server-side validation:
+- Same checks
+- Optional: test webhook on save (POST a test payload, check for 200 response)
 
 ## Security and safety
 
-- Keep Home Assistant credentials server-side only (already true).
-- Ensure only admins can change sync settings (match existing settings permission behavior).
-- Validate `entity_id` format (simple `domain.object_id` string check) and require `domain == "alarm_control_panel"`.
+- **No HA credentials stored**: Webhooks are public URLs with secret IDs; no auth token needed.
+- **Webhook ID secrecy**: The webhook ID in the URL is the secret; treat it like a password (don't log full URLs).
+- **HTTPS recommended**: Encourage users to use HTTPS if HA is exposed outside local network.
+- **Validate settings permissions**: Ensure only admins can change integration settings (match existing settings permission behavior).
+- **Rate limiting**: Consider rate-limiting webhook calls to prevent abuse if URL leaks.
 
 ## Observability
 
-- Log key events:
-  - HA unreachable/reachable transitions
-  - inbound adopted HA state
-  - outbound push attempts/success/failure
-- Include `settings_profile_id` and `entity_id` in logs.
+Log key events:
+- Webhook push attempts (log state, profile ID, success/failure)
+- Webhook push failures (log error, retry count)
+- Webhook URL changes (audit log)
+
+Include `settings_profile_id` and sanitized `webhook_url` (mask webhook ID) in logs.
+
+Example:
+```
+INFO: Pushed state 'armed_away' to HA webhook (profile=1, url=http://***.***.***.***:8123/api/webhook/***...***, status=200)
+ERROR: Failed to push state 'triggered' to HA webhook (profile=1, error=Connection timeout, retry=1/3)
+```
 
 ## Testing plan
 
-Backend:
-- Unit tests for state mapping table.
-- Unit tests for conflict resolution rules (`last_updated` comparisons, pending behavior).
-- Task tests using `override_settings(CELERY_TASK_ALWAYS_EAGER=True)` (pattern exists) to validate:
-  - failures keep pending + record error
-  - success clears pending
-- API tests for `GET /api/alarm/state/` ensuring:
-  - HA offline returns local snapshot and flags “offline”
-  - HA online newer than local updates local snapshot via `ha_sync`
+### Backend
 
-Frontend:
-- Smoke tests around Settings page parsing/serialization of `homeAssistantAlarmSync`.
-- Manual verification: disconnect HA (bad token) and confirm “offline” + “pending” behavior.
+- **Unit tests for payload construction**:
+  - Verify JSON payload format
+  - Verify state mapping
+
+- **Task tests** (using `override_settings(CELERY_TASK_ALWAYS_EAGER=True)`):
+  - Mock `requests.post` to simulate success/failure
+  - Verify retries on failure
+  - Verify last push status model updates
+
+- **Integration tests**:
+  - Trigger state transition, verify webhook task is enqueued
+  - Verify task not enqueued when integration disabled
+  - Verify task not enqueued for certain metadata (if skip logic added)
+
+- **Startup push tests**:
+  - Verify startup task pushes current state for all active profiles with integration enabled
+  - Verify startup task skips profiles with integration disabled
+  - Verify startup task handles missing snapshot gracefully
+
+### Frontend
+
+- **Settings page**:
+  - Smoke tests for form parsing/serialization of `homeAssistantIntegration`
+  - Validation tests (invalid URLs rejected)
+
+- **Manual verification**:
+  - Set up real HA webhook, trigger transitions, verify HA receives payloads
+  - Test with unreachable webhook URL, verify failure status displayed
+
+### HA-side testing
+
+Create a test webhook automation in HA that logs received payloads:
+
+```yaml
+trigger:
+  - platform: webhook
+    webhook_id: alarm_test_webhook
+action:
+  - service: persistent_notification.create
+    data:
+      title: "{{ trigger.json.entity_name }} Update"
+      message: "State: {{ trigger.json.state }}, Changed at: {{ trigger.json.changed_at }}"
+```
 
 ## Rollout / ops notes
 
-- If outbound retries are desired in dev, ensure a Celery worker runs (and beat if periodic polling is added).
-- If the current deployment does not run Celery, start with read-time sync and “best-effort” outbound push (no retries), or add worker as part of deployment.
+- **Celery worker required**: Webhook push uses Celery tasks; ensure a worker is running.
+- **Webhook setup documentation**: Provide clear docs with HA YAML examples for webhook automation + `input_select` setup.
+- **Migration**: If users previously expected HA → app sync, clarify that this is now one-way (app → HA) and HA controls the app via API.
+- **Future enhancements**:
+  - Support multiple webhook URLs (broadcast to multiple HA instances)
+  - Webhook signature/HMAC for verification (if HA supports it)
+  - Fallback to MQTT if webhook fails repeatedly
 
+## Example HA Configuration
+
+### Full working example
+
+**1. Create input_select helper** (`configuration.yaml`):
+
+```yaml
+input_select:
+  alarm_app_state:
+    name: Alarm App State
+    options:
+      - disarmed
+      - arming
+      - pending
+      - triggered
+      - armed_home
+      - armed_away
+      - armed_night
+      - armed_vacation
+    icon: mdi:shield-home
+```
+
+**2. Create webhook automation** (via UI or `automations.yaml`):
+
+```yaml
+- id: alarm_app_webhook
+  alias: "Alarm App State Webhook"
+  trigger:
+    - platform: webhook
+      webhook_id: my_secret_alarm_webhook_id
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.alarm_app_state
+      data:
+        option: "{{ trigger.json.state }}"
+    - service: logbook.log
+      data:
+        name: "{{ trigger.json.entity_name }}"
+        message: "State changed to {{ trigger.json.state }}"
+```
+
+**3. Create REST commands for control** (`configuration.yaml`):
+
+```yaml
+rest_command:
+  alarm_disarm:
+    url: "http://192.168.1.100:8000/api/alarm/disarm/"
+    method: POST
+    headers:
+      Authorization: "Bearer YOUR_APP_API_TOKEN"
+      Content-Type: "application/json"
+
+  alarm_arm_home:
+    url: "http://192.168.1.100:8000/api/alarm/arm/home/"
+    method: POST
+    headers:
+      Authorization: "Bearer YOUR_APP_API_TOKEN"
+      Content-Type: "application/json"
+
+  alarm_arm_away:
+    url: "http://192.168.1.100:8000/api/alarm/arm/away/"
+    method: POST
+    headers:
+      Authorization: "Bearer YOUR_APP_API_TOKEN"
+      Content-Type: "application/json"
+```
+
+**4. Configure webhook URL in app settings**:
+
+```
+http://homeassistant.local:8123/api/webhook/my_secret_alarm_webhook_id
+```
+
+**5. Use in HA automations**:
+
+```yaml
+- id: alarm_triggered_notification
+  alias: "Send notification when alarm triggered"
+  trigger:
+    - platform: state
+      entity_id: input_select.alarm_app_state
+      to: "triggered"
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "Alarm Triggered!"
+        message: "{{ state_attr('input_select.alarm_app_state', 'friendly_name') }} triggered at {{ now().strftime('%H:%M:%S') }}"
+
+- id: arm_away_when_leaving
+  alias: "Arm away when everyone leaves"
+  trigger:
+    - platform: state
+      entity_id: zone.home
+      to: "0"
+  action:
+    - service: rest_command.alarm_arm_away
+```

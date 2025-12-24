@@ -13,7 +13,7 @@ export type EventsQueryFilters = {
 
 export function useEventsInfiniteQuery(filters: EventsQueryFilters, pageSize: number = 50) {
   const session = useAuthSessionQuery()
-  const isAuthenticated = session.data.isAuthenticated
+  const isAuthenticated = session.data?.isAuthenticated ?? false
 
   const key = [
     ...queryKeys.events.all,
