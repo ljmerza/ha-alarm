@@ -19,14 +19,11 @@ export interface SetupStatus {
 export interface OnboardingRequest {
   email: string
   password: string
-  homeName: string
 }
 
 export interface OnboardingResponse {
   userId: string
   email: string
-  homeName: string
-  timezone: string
 }
 
 export const onboardingService = {

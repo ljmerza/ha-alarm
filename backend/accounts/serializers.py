@@ -9,7 +9,6 @@ class OnboardingSerializer(serializers.Serializer):
     email = serializers.EmailField(required=False)
     username = serializers.EmailField(required=False)
     password = serializers.CharField(write_only=True)
-    home_name = serializers.CharField(max_length=150)
 
     def validate(self, attrs):
         email = attrs.get("email") or attrs.get("username")

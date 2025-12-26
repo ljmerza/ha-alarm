@@ -6,18 +6,17 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from accounts.models import Role, User, UserRoleAssignment
-from alarm.models import AlarmSettingsProfile, AlarmStateSnapshot, AlarmSystem
+from alarm.models import AlarmSettingsProfile, AlarmStateSnapshot
 
 
 class OnboardingApiTests(APITestCase):
     def setUp(self):
         self.url = reverse("onboarding")
 
-    def test_onboarding_creates_admin_and_system(self):
+    def test_onboarding_creates_admin_user(self):
         payload = {
             "email": "admin@example.com",
             "password": "StrongPass123!",
-            "home_name": "Primary Residence",
         }
         response = self.client.post(self.url, data=payload)
         self.assertEqual(response.status_code, 201)
@@ -27,16 +26,12 @@ class OnboardingApiTests(APITestCase):
         self.assertTrue(user.is_superuser)
         self.assertEqual(user.timezone, settings.TIME_ZONE)
 
-        alarm_system = AlarmSystem.objects.get()
-        self.assertEqual(alarm_system.name, "Primary Residence")
-        self.assertEqual(alarm_system.timezone, settings.TIME_ZONE)
-
         role = Role.objects.get(slug="admin")
         self.assertTrue(
             UserRoleAssignment.objects.filter(user=user, role=role).exists()
         )
-        self.assertTrue(AlarmSettingsProfile.objects.filter(is_active=True).exists())
-        self.assertTrue(AlarmStateSnapshot.objects.exists())
+        self.assertFalse(AlarmSettingsProfile.objects.filter(is_active=True).exists())
+        self.assertFalse(AlarmStateSnapshot.objects.exists())
 
     def test_onboarding_blocks_when_user_exists(self):
         User.objects.create_user(email="existing@example.com", password="pass")
@@ -45,7 +40,6 @@ class OnboardingApiTests(APITestCase):
             data={
                 "email": "admin2@example.com",
                 "password": "StrongPass123!",
-                "home_name": "Primary Residence",
             },
         )
         self.assertEqual(response.status_code, 409)
@@ -68,9 +62,8 @@ class OnboardingApiTests(APITestCase):
             data={
                 "email": "admin3@example.com",
                 "password": "StrongPass123!",
-                "home_name": "Primary Residence",
             },
         )
         self.assertEqual(response.status_code, 201)
-        alarm_system = AlarmSystem.objects.get()
-        self.assertEqual(alarm_system.timezone, "America/New_York")
+        user = User.objects.get(email="admin3@example.com")
+        self.assertEqual(user.timezone, "America/New_York")

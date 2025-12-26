@@ -15,7 +15,6 @@ import { FormField } from '@/components/ui/form-field'
 import { IconButton } from '@/components/ui/icon-button'
 
 const onboardingSchema = z.object({
-  homeName: z.string().min(2, 'Home name is required'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 })
@@ -44,7 +43,6 @@ export function OnboardingPage() {
       await createOnboarding.mutateAsync({
         email: data.email,
         password: data.password,
-        homeName: data.homeName,
       })
       navigate(Routes.LOGIN)
     } catch (err) {
@@ -61,16 +59,6 @@ export function OnboardingPage() {
       icon={<Shield className="h-6 w-6" />}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <FormField label="Home name" htmlFor="homeName" required error={errors.homeName?.message}>
-          <Input
-            id="homeName"
-            type="text"
-            placeholder="Primary Residence"
-            {...register('homeName')}
-            disabled={isSubmitting}
-          />
-        </FormField>
-
         <FormField label="Admin email" htmlFor="email" required error={errors.email?.message}>
           <Input
             id="email"
