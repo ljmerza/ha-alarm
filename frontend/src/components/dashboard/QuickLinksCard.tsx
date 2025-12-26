@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { LayoutGrid, Gavel, List, KeyRound, Settings } from 'lucide-react'
+import { LayoutGrid, Gavel, List, KeyRound, DoorClosed, Settings } from 'lucide-react'
 import { Routes as AppRoutes } from '@/lib/constants'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,10 +32,16 @@ export function QuickLinksCard() {
         <Button asChild variant="outline" className="justify-start">
           <Link to={AppRoutes.CODES}>
             <KeyRound />
-            Codes
+            Alarm Codes
           </Link>
         </Button>
-        <Button asChild variant="outline" className="justify-start col-span-2">
+        <Button asChild variant="outline" className="justify-start">
+          <Link to={AppRoutes.DOOR_CODES}>
+            <DoorClosed />
+            Door Codes
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="justify-start">
           <Link to={AppRoutes.SETTINGS}>
             <Settings />
             Settings

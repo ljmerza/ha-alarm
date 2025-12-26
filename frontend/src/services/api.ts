@@ -124,7 +124,7 @@ class ApiClient {
         headers,
         credentials: 'include',
         body:
-          method === 'GET' || method === 'DELETE'
+          method === 'GET'
             ? undefined
             : options?.data
               ? JSON.stringify(transformKeysDeep(options.data, toSnakeCaseKey))
@@ -216,8 +216,8 @@ class ApiClient {
     return this.request<T>('PATCH', endpoint, { data })
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>('DELETE', endpoint)
+  async delete<T>(endpoint: string, data?: unknown): Promise<T> {
+    return this.request<T>('DELETE', endpoint, { data })
   }
 }
 

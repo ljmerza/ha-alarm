@@ -78,6 +78,7 @@ export const Routes = {
   RULES: '/rules',
   RULES_TEST: '/rules/test',
   CODES: '/codes',
+  DOOR_CODES: '/door-codes',
   EVENTS: '/events',
   SETTINGS: '/settings',
 } as const

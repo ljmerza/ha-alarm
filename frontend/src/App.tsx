@@ -20,6 +20,7 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const RulesPage = lazy(() => import('@/pages/RulesPage'))
 const RulesTestPage = lazy(() => import('@/pages/RulesTestPage'))
 const CodesPage = lazy(() => import('@/pages/CodesPage'))
+const DoorCodesPage = lazy(() => import('@/pages/DoorCodesPage'))
 const EventsPage = lazy(() => import('@/pages/EventsPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
@@ -95,6 +96,7 @@ function AppContent() {
             <Route path={AppRoutes.RULES} element={<RulesPage />} />
             <Route path={AppRoutes.RULES_TEST} element={<RulesTestPage />} />
             <Route path={AppRoutes.CODES} element={<CodesPage />} />
+            <Route path={AppRoutes.DOOR_CODES} element={<DoorCodesPage />} />
             <Route path={AppRoutes.EVENTS} element={<EventsPage />} />
             <Route path={AppRoutes.SETTINGS} element={<SettingsPage />} />
           </Route>

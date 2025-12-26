@@ -1,6 +1,7 @@
 export * from './alarm'
 export * from './user'
 export * from './code'
+export * from './doorCode'
 export * from './api'
 export * from './rules'
 export * from './settings'

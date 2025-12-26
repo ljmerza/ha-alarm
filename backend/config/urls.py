@@ -12,4 +12,5 @@ urlpatterns = [
     path("api/system-config/", alarm_views.SystemConfigListView.as_view(), name="system-config-list"),
     path("api/system-config/<str:key>/", alarm_views.SystemConfigDetailView.as_view(), name="system-config-detail"),
     path("api/", include("accounts.urls")),
+    path("api/", include("locks.urls")),
 ]

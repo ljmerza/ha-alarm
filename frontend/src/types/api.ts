@@ -74,6 +74,11 @@ export const queryKeys = {
     detail: (id: number) => ['codes', id] as const,
     usage: (id: number) => ['codes', id, 'usage'] as const,
   },
+  doorCodes: {
+    all: ['doorCodes'] as const,
+    byUser: (userId: string) => ['doorCodes', 'byUser', userId] as const,
+    detail: (id: number) => ['doorCodes', id] as const,
+  },
   events: {
     all: ['events'] as const,
     recent: ['events', 'recent'] as const,

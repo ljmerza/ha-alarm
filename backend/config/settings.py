@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "channels",
     "accounts",
     "alarm",
+    "locks",
 ]
 
 MIDDLEWARE = [
