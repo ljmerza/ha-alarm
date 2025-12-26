@@ -107,7 +107,7 @@ export function RulesTestPage() {
   }
 
   const isLoading = entitiesQuery.isLoading || entitiesQuery.isFetching || syncEntitiesMutation.isPending
-  const displayedError = error ?? getErrorMessage(entitiesQuery.error) ?? null
+  const displayedError = error || getErrorMessage(entitiesQuery.error) || null
 
   const entityStates = useMemo(() => {
     const out: Record<string, string> = {}

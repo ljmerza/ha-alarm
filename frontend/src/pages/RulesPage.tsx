@@ -227,7 +227,11 @@ export function RulesPage() {
     )
   }
 
-  const displayedError = error ?? getErrorMessage(rulesQuery.error) ?? getErrorMessage(entitiesQuery.error) ?? null
+  const displayedError =
+    error ||
+    getErrorMessage(rulesQuery.error) ||
+    getErrorMessage(entitiesQuery.error) ||
+    null
 
   const startEdit = (rule: Rule) => {
     setEditingId(rule.id)

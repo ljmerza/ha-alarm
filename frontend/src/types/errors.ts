@@ -83,6 +83,9 @@ export function isErrorInstance(error: unknown): error is Error {
  * Returns a user-friendly message, never throws
  */
 export function getErrorMessage(error: unknown, fallback = 'An unknown error occurred'): string {
+  // Common case: "no error" values from libraries like react-query
+  if (error == null) return ''
+
   // Standard Error instance
   if (isErrorInstance(error)) {
     return error.message || fallback
