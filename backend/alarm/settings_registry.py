@@ -120,7 +120,7 @@ ALARM_PROFILE_SETTINGS: list[SettingDefinition] = [
             "password": "",
             "use_tls": False,
             "tls_insecure": False,
-            "client_id": "cubxi-alarm",
+            "client_id": "latchpoint-alarm",
             "keepalive_seconds": 30,
             "connect_timeout_seconds": 5,
         },
@@ -132,11 +132,25 @@ ALARM_PROFILE_SETTINGS: list[SettingDefinition] = [
         value_type=SystemConfigValueType.JSON,
         default={
             "enabled": False,
-            "entity_name": "Home Alarm",
+            "entity_name": "Latchpoint",
             "also_rename_in_home_assistant": True,
-            "ha_entity_id": "alarm_control_panel.cubxi_alarm",
+            "ha_entity_id": "alarm_control_panel.latchpoint_alarm",
         },
         description="Home Assistant alarm entity settings (MQTT discovery).",
+    ),
+    SettingDefinition(
+        key="zwavejs_connection",
+        name="Z-Wave JS connection",
+        value_type=SystemConfigValueType.JSON,
+        default={
+            "enabled": False,
+            "ws_url": "",
+            "api_token": "",
+            "connect_timeout_seconds": 5,
+            "reconnect_min_seconds": 1,
+            "reconnect_max_seconds": 30,
+        },
+        description="Z-Wave JS Server connection settings (WebSocket).",
     ),
 ]
 

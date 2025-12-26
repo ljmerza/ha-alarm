@@ -20,6 +20,12 @@ from .mqtt import (
     MqttConnectionSettingsUpdateSerializer,
     MqttTestConnectionSerializer,
 )
+from .zwavejs import (
+    ZwavejsConnectionSettingsSerializer,
+    ZwavejsConnectionSettingsUpdateSerializer,
+    ZwavejsSetValueSerializer,
+    ZwavejsTestConnectionSerializer,
+)
 
 __all__ = [
     "AlarmEventSerializer",
@@ -43,4 +49,8 @@ __all__ = [
     "MqttTestConnectionSerializer",
     "HomeAssistantAlarmEntitySettingsSerializer",
     "HomeAssistantAlarmEntitySettingsUpdateSerializer",
+    "ZwavejsConnectionSettingsSerializer",
+    "ZwavejsConnectionSettingsUpdateSerializer",
+    "ZwavejsSetValueSerializer",
+    "ZwavejsTestConnectionSerializer",
 ]

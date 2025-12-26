@@ -15,6 +15,13 @@ from .mqtt import (
     MqttStatusView,
     MqttTestConnectionView,
 )
+from .zwavejs import (
+    ZwavejsEntitySyncView,
+    ZwavejsSetValueView,
+    ZwavejsSettingsView,
+    ZwavejsStatusView,
+    ZwavejsTestConnectionView,
+)
 from .rules import RuleDetailView, RuleRunView, RuleSimulateView, RulesView
 from .sensors import SensorDetailView, SensorsView
 from .settings import AlarmSettingsView
@@ -48,6 +55,11 @@ __all__ = [
     "MqttTestConnectionView",
     "MqttPublishDiscoveryView",
     "HomeAssistantAlarmEntitySettingsView",
+    "ZwavejsSettingsView",
+    "ZwavejsStatusView",
+    "ZwavejsTestConnectionView",
+    "ZwavejsEntitySyncView",
+    "ZwavejsSetValueView",
     "RuleDetailView",
     "RuleRunView",
     "RuleSimulateView",

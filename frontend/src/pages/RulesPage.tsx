@@ -26,6 +26,7 @@ import { getErrorMessage } from '@/types/errors'
 import { isRecord, isWhenOperator, isAlarmArmMode, type WhenOperator, type AlarmArmMode } from '@/lib/typeGuards'
 import { parseRuleDefinition, type RuleDefinition } from '@/types/ruleDefinition'
 import { getSelectValue } from '@/lib/formHelpers'
+import { useSyncZwavejsEntitiesMutation } from '@/hooks/useZwavejs'
 
 const ruleKinds: { value: RuleKind; label: string }[] = [
   { value: 'trigger', label: 'Trigger' },
@@ -53,6 +54,16 @@ type ActionRow =
       service: string
       targetEntityIds: string
       serviceDataJson: string
+    }
+  | {
+      id: string
+      type: 'zwavejs_set_value'
+      nodeId: string
+      commandClass: string
+      endpoint: string
+      property: string
+      propertyKey: string
+      valueJson: string
     }
 
 function parseEntityIds(value: string): string[] {
@@ -96,6 +107,40 @@ function buildDefinitionFromBuilder(
     if (a.type === 'alarm_disarm') return { type: 'alarm_disarm' }
     if (a.type === 'alarm_trigger') return { type: 'alarm_trigger' }
     if (a.type === 'alarm_arm') return { type: 'alarm_arm', mode: a.mode }
+    if (a.type === 'zwavejs_set_value') {
+      const nodeId = Number.parseInt(a.nodeId.trim() || '', 10)
+      const commandClass = Number.parseInt(a.commandClass.trim() || '', 10)
+      const endpoint = Number.parseInt(a.endpoint.trim() || '0', 10)
+      const property = (() => {
+        const raw = a.property.trim()
+        const asNumber = Number.parseInt(raw, 10)
+        return raw !== '' && String(asNumber) === raw ? asNumber : raw
+      })()
+      const propertyKey = (() => {
+        const raw = a.propertyKey.trim()
+        if (!raw) return undefined
+        const asNumber = Number.parseInt(raw, 10)
+        return String(asNumber) === raw ? asNumber : raw
+      })()
+      const value = (() => {
+        try {
+          return JSON.parse(a.valueJson || 'null')
+        } catch {
+          return a.valueJson
+        }
+      })()
+      return {
+        type: 'zwavejs_set_value',
+        node_id: Number.isFinite(nodeId) ? nodeId : 0,
+        value_id: {
+          commandClass: Number.isFinite(commandClass) ? commandClass : 0,
+          endpoint: Number.isFinite(endpoint) ? endpoint : 0,
+          property,
+          ...(propertyKey !== undefined ? { propertyKey } : {}),
+        },
+        value,
+      }
+    }
     return {
       type: 'ha_call_service',
       domain: a.domain.trim(),
@@ -172,12 +217,14 @@ export function RulesPage() {
   }
 
   const syncEntitiesMutation = useSyncEntitiesMutation()
+  const syncZwavejsEntitiesMutation = useSyncZwavejsEntitiesMutation()
   const runRulesMutation = useRunRulesMutation()
   const saveRuleMutation = useSaveRuleMutation()
   const deleteRuleMutation = useDeleteRuleMutation()
 
   const isSaving =
     syncEntitiesMutation.isPending ||
+    syncZwavejsEntitiesMutation.isPending ||
     runRulesMutation.isPending ||
     saveRuleMutation.isPending ||
     deleteRuleMutation.isPending
@@ -190,6 +237,17 @@ export function RulesPage() {
       setNotice(result.notice)
     } catch (err) {
       setError(getErrorMessage(err) || 'Failed to sync entities')
+    }
+  }
+
+  const syncZwavejsEntities = async () => {
+    setNotice(null)
+    setError(null)
+    try {
+      const result = await syncZwavejsEntitiesMutation.mutateAsync()
+      setNotice(result.notice)
+    } catch (err) {
+      setError(getErrorMessage(err) || 'Failed to sync Z-Wave JS entities')
     }
   }
 
@@ -322,6 +380,29 @@ export function RulesPage() {
               serviceDataJson: JSON.stringify(action.service_data ?? {}, null, 2),
             })
           }
+          if (type === 'zwavejs_set_value') {
+            const valueId = isRecord(action.value_id) ? action.value_id : null
+            nextActions.push({
+              id: uniqueId(),
+              type: 'zwavejs_set_value',
+              nodeId: typeof action.node_id === 'number' ? String(action.node_id) : '',
+              commandClass: typeof valueId?.commandClass === 'number' ? String(valueId.commandClass) : '',
+              endpoint: typeof valueId?.endpoint === 'number' ? String(valueId.endpoint) : '0',
+              property:
+                typeof valueId?.property === 'number'
+                  ? String(valueId.property)
+                  : typeof valueId?.property === 'string'
+                    ? valueId.property
+                    : '',
+              propertyKey:
+                typeof valueId?.propertyKey === 'number'
+                  ? String(valueId.propertyKey)
+                  : typeof valueId?.propertyKey === 'string'
+                    ? valueId.propertyKey
+                    : '',
+              valueJson: JSON.stringify(action.value ?? null, null, 2),
+            })
+          }
         }
       }
       setActions(nextActions.length ? nextActions : [{ id: uniqueId(), type: 'alarm_trigger' }])
@@ -402,7 +483,12 @@ export function RulesPage() {
         <>
           <Tooltip content="Imports/updates the local Entity Registry from Home Assistant, so entity IDs autocomplete and can be referenced in rules.">
             <Button type="button" variant="outline" onClick={syncEntities} disabled={isSaving}>
-              Sync Entities
+              Sync HA Entities
+            </Button>
+          </Tooltip>
+          <Tooltip content="Imports/updates the local Entity Registry from Z-Wave JS UI / zwave-js-server.">
+            <Button type="button" variant="outline" onClick={syncZwavejsEntities} disabled={isSaving}>
+              Sync Z-Wave Entities
             </Button>
           </Tooltip>
           <Tooltip content="Runs enabled rules immediately using the server-side engine (useful for testing).">
@@ -750,6 +836,17 @@ export function RulesPage() {
                                   if (type === 'alarm_disarm') return { id: row.id, type }
                                   if (type === 'alarm_trigger') return { id: row.id, type }
                                   if (type === 'alarm_arm') return { id: row.id, type, mode: 'armed_away' }
+                                  if (type === 'zwavejs_set_value')
+                                    return {
+                                      id: row.id,
+                                      type,
+                                      nodeId: '',
+                                      commandClass: '',
+                                      endpoint: '0',
+                                      property: '',
+                                      propertyKey: '',
+                                      valueJson: 'true',
+                                    }
                                   return {
                                     id: row.id,
                                     type,
@@ -766,6 +863,7 @@ export function RulesPage() {
 	                            <option value="alarm_disarm">Alarm disarm</option>
 	                            <option value="alarm_arm">Alarm arm</option>
 	                            <option value="ha_call_service">Home Assistant call_service</option>
+	                            <option value="zwavejs_set_value">Z-Wave JS set_value</option>
 	                          </Select>
 	                        </div>
 

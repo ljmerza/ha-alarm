@@ -14,17 +14,17 @@ from alarm import services
 from alarm.models import AlarmState
 from alarm.mqtt.manager import MqttNotReachable, mqtt_connection_manager
 from alarm.mqtt import status_store
+from alarm.mqtt.constants import (
+    AVAILABILITY_TOPIC,
+    COMMAND_TOPIC,
+    DISCOVERY_TOPIC,
+    ERROR_TOPIC,
+    OBJECT_ID,
+    STATE_TOPIC,
+)
 from alarm.state_machine.settings import get_active_settings_profile, get_setting_bool, get_setting_json
 
 logger = logging.getLogger(__name__)
-
-
-OBJECT_ID = "cubxi_alarm"
-DISCOVERY_TOPIC = f"homeassistant/alarm_control_panel/{OBJECT_ID}/config"
-STATE_TOPIC = f"{OBJECT_ID}/alarm/state"
-COMMAND_TOPIC = f"{OBJECT_ID}/alarm/command"
-AVAILABILITY_TOPIC = f"{OBJECT_ID}/alarm/availability"
-ERROR_TOPIC = f"{OBJECT_ID}/alarm/error"
 
 _init_lock = threading.Lock()
 _initialized = False
@@ -45,7 +45,7 @@ def _get_entity_settings() -> HaAlarmEntitySettings:
         raw = {}
     return HaAlarmEntitySettings(
         enabled=bool(raw.get("enabled", False)),
-        entity_name=str(raw.get("entity_name") or "Home Alarm"),
+        entity_name=str(raw.get("entity_name") or "Latchpoint"),
         also_rename_in_home_assistant=bool(raw.get("also_rename_in_home_assistant", True)),
         ha_entity_id=str(raw.get("ha_entity_id") or f"alarm_control_panel.{OBJECT_ID}"),
     )

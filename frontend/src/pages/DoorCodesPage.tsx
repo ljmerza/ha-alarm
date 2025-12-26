@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
 import { useUsersQuery } from '@/hooks/useCodesQueries'
 import { useEntitiesQuery, useSyncEntitiesMutation } from '@/hooks/useRulesQueries'
+import { useSyncZwavejsEntitiesMutation } from '@/hooks/useZwavejs'
 import {
   useCreateDoorCodeMutation,
   useDeleteDoorCodeMutation,
@@ -101,6 +102,7 @@ export function DoorCodesPage() {
   const doorCodesQuery = useDoorCodesQuery({ userId: targetUserId, isAdmin })
   const entitiesQuery = useEntitiesQuery()
   const syncEntitiesMutation = useSyncEntitiesMutation()
+  const syncZwavejsEntitiesMutation = useSyncZwavejsEntitiesMutation()
 
   const createMutation = useCreateDoorCodeMutation(targetUserId)
   const updateMutation = useUpdateDoorCodeMutation(targetUserId)
@@ -611,13 +613,14 @@ export function DoorCodesPage() {
               <Alert variant="warning" layout="inline">
                 <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
                   <span>No lock entities found in the registry.</span>
-                  <Button
-                    variant="secondary"
-                    onClick={() => syncEntitiesMutation.mutate()}
-                    disabled={syncEntitiesMutation.isPending}
-                  >
-                    {syncEntitiesMutation.isPending ? 'Syncing…' : 'Sync entities'}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => syncEntitiesMutation.mutate()} disabled={syncEntitiesMutation.isPending}>
+                      {syncEntitiesMutation.isPending ? 'Syncing…' : 'Sync HA'}
+                    </Button>
+                    <Button variant="secondary" onClick={() => syncZwavejsEntitiesMutation.mutate()} disabled={syncZwavejsEntitiesMutation.isPending}>
+                      {syncZwavejsEntitiesMutation.isPending ? 'Syncing…' : 'Sync Z-Wave'}
+                    </Button>
+                  </div>
                 </AlertDescription>
               </Alert>
             )}

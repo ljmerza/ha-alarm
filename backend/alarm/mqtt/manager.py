@@ -260,7 +260,7 @@ class MqttConnectionManager:
 
     @staticmethod
     def _build_client(*, mqtt, settings: MqttConnectionSettings):
-        client_id = str(settings.get("client_id") or "cubxi-alarm")
+        client_id = str(settings.get("client_id") or "latchpoint-alarm")
         try:
             client = mqtt.Client(client_id=client_id)
         except TypeError:
@@ -278,7 +278,9 @@ class MqttConnectionManager:
 
         # Best-effort HA availability support via LWT.
         try:
-            client.will_set("cubxi_alarm/alarm/availability", payload="offline", qos=0, retain=True)
+            from alarm.mqtt.constants import AVAILABILITY_TOPIC
+
+            client.will_set(AVAILABILITY_TOPIC, payload="offline", qos=0, retain=True)
         except Exception:
             pass
         return client

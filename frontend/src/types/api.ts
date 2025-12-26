@@ -105,6 +105,10 @@ export const queryKeys = {
     settings: ['mqtt', 'settings'] as const,
     alarmEntity: ['mqtt', 'alarmEntity'] as const,
   },
+  zwavejs: {
+    status: ['zwavejs', 'status'] as const,
+    settings: ['zwavejs', 'settings'] as const,
+  },
   onboarding: {
     status: ['onboarding', 'status'] as const,
     setupStatus: ['onboarding', 'setupStatus'] as const,

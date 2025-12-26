@@ -54,7 +54,7 @@ Store broker settings in the same way other system configuration is stored today
   "password": "",
   "use_tls": false,
   "tls_insecure": false,
-  "client_id": "cubxi-alarm",
+  "client_id": "latchpoint-alarm",
   "keepalive_seconds": 30,
   "connect_timeout_seconds": 5
 }
@@ -71,7 +71,7 @@ Notes:
   "enabled": false,
   "entity_name": "Home Alarm",
   "also_rename_in_home_assistant": true,
-  "ha_entity_id": "alarm_control_panel.cubxi_alarm"
+  "ha_entity_id": "alarm_control_panel.latchpoint_alarm"
 }
 ```
 
@@ -121,24 +121,24 @@ Avoid hammering the broker when credentials are wrong: treat auth failures as â€
 Use a small registry so other parts of the app can register subscriptions without owning the client.
 
 Minimum subscriptions for HA alarm entity:
-- `cubxi_alarm/alarm/command` (receive arm/disarm commands with code)
+- `latchpoint_alarm/alarm/command` (receive arm/disarm commands with code)
 
 Optional:
-- `cubxi_alarm/alarm/ping` (latency measurement)
+- `latchpoint_alarm/alarm/ping` (latency measurement)
 
 ## Home Assistant alarm entity via MQTT discovery
 
 ### Topics (recommended defaults)
 - Discovery config:
-  - `homeassistant/alarm_control_panel/cubxi_alarm/config`
+  - `homeassistant/alarm_control_panel/latchpoint_alarm/config`
 - State:
-  - `cubxi_alarm/alarm/state` (string payload state, or JSON if needed)
+  - `latchpoint_alarm/alarm/state` (string payload state, or JSON if needed)
 - Command:
-  - `cubxi_alarm/alarm/command` (JSON payload including command + code)
+  - `latchpoint_alarm/alarm/command` (JSON payload including command + code)
 - Availability:
-  - `cubxi_alarm/alarm/availability` (`online`/`offline`)
+  - `latchpoint_alarm/alarm/availability` (`online`/`offline`)
 - Error (optional):
-  - `cubxi_alarm/alarm/error` (JSON payload for rejected commands; never includes raw code)
+  - `latchpoint_alarm/alarm/error` (JSON payload for rejected commands; never includes raw code)
 
 ### Discovery payload requirements
 Generate and publish a discovery config that:

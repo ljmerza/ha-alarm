@@ -19,6 +19,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { getErrorMessage } from '@/lib/errors'
 import type { RuleSimulateResult } from '@/types'
 import { useEntitiesQuery, useSyncEntitiesMutation } from '@/hooks/useRulesQueries'
+import { useSyncZwavejsEntitiesMutation } from '@/hooks/useZwavejs'
 
 type Row = { id: string; entityId: string; state: string }
 
@@ -96,6 +97,7 @@ export function RulesTestPage() {
   }, [])
 
   const syncEntitiesMutation = useSyncEntitiesMutation()
+  const syncZwavejsEntitiesMutation = useSyncZwavejsEntitiesMutation()
 
   const syncEntities = async () => {
     setError(null)
@@ -106,7 +108,20 @@ export function RulesTestPage() {
     }
   }
 
-  const isLoading = entitiesQuery.isLoading || entitiesQuery.isFetching || syncEntitiesMutation.isPending
+  const syncZwavejsEntities = async () => {
+    setError(null)
+    try {
+      await syncZwavejsEntitiesMutation.mutateAsync()
+    } catch (err) {
+      setError(getErrorMessage(err) || 'Failed to sync Z-Wave JS entities')
+    }
+  }
+
+  const isLoading =
+    entitiesQuery.isLoading ||
+    entitiesQuery.isFetching ||
+    syncEntitiesMutation.isPending ||
+    syncZwavejsEntitiesMutation.isPending
   const displayedError = error || getErrorMessage(entitiesQuery.error) || null
 
   const entityStates = useMemo(() => {
@@ -318,7 +333,12 @@ export function RulesTestPage() {
           </Button>
           <Tooltip content="Imports/updates the local Entity Registry from Home Assistant.">
             <Button type="button" variant="outline" onClick={syncEntities} disabled={isLoading || isRunning}>
-              Sync Entities
+              Sync HA Entities
+            </Button>
+          </Tooltip>
+          <Tooltip content="Imports/updates the local Entity Registry from Z-Wave JS UI / zwave-js-server.">
+            <Button type="button" variant="outline" onClick={syncZwavejsEntities} disabled={isLoading || isRunning}>
+              Sync Z-Wave Entities
             </Button>
           </Tooltip>
           <Button

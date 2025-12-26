@@ -40,7 +40,7 @@ Use HA’s built-in MQTT integration and discovery protocol so this app can “c
 High-level flow:
 1. User configures MQTT broker in HA (or already has it).
 2. User enables MQTT settings in this app (broker URL + credentials).
-3. This app publishes HA MQTT discovery config for `alarm_control_panel.cubxi_alarm` (or similar stable object id).
+3. This app publishes HA MQTT discovery config for `alarm_control_panel.latchpoint_alarm` (or similar stable object id).
 4. This app publishes state updates to a `state_topic`.
 5. HA publishes arm/disarm commands (including the user-entered code) to a `command_topic`.
 6. This app validates the code and executes the transition through its existing API/use cases/state machine.
@@ -79,8 +79,8 @@ When MQTT is configured:
 
 ### Recommended identifiers
 MQTT discovery uses a stable object id; HA assigns an entity_id derived from it:
-- **Discovery object id**: `cubxi_alarm` (stable)
-- **Entity id (HA)**: typically `alarm_control_panel.cubxi_alarm` (stable)
+- **Discovery object id**: `latchpoint_alarm` (stable)
+- **Entity id (HA)**: typically `alarm_control_panel.latchpoint_alarm` (stable)
 
 Do not rely on entity_id drift; if HA entity is deleted, re-publishing discovery recreates it.
 
@@ -99,7 +99,7 @@ Define a single-instance settings block (no profiles):
   "enabled": false,
   "entity_name": "Home Alarm",
   "also_rename_in_home_assistant": true,
-  "ha_entity_id": "alarm_control_panel.cubxi_alarm",
+  "ha_entity_id": "alarm_control_panel.latchpoint_alarm",
   "last_seen_at": null,
   "last_error": null
 }
@@ -117,10 +117,10 @@ Thin views + use cases (per `docs/adr/0005-thin-views-and-use-cases.md`):
 
 ## MQTT topic design
 Choose one stable base topic per app instance:
-- Discovery: `homeassistant/alarm_control_panel/cubxi_alarm/config`
-- State: `cubxi_alarm/alarm/state`
-- Command: `cubxi_alarm/alarm/command`
-- Availability (optional): `cubxi_alarm/alarm/availability`
+- Discovery: `homeassistant/alarm_control_panel/latchpoint_alarm/config`
+- State: `latchpoint_alarm/alarm/state`
+- Command: `latchpoint_alarm/alarm/command`
+- Availability (optional): `latchpoint_alarm/alarm/availability`
 
 Discovery payload should:
 - Set `name` from app setting
@@ -139,7 +139,7 @@ Approach:
 ### Happy path
 1. User completes app onboarding, enables HA, enters desired alarm name.
 2. User configures MQTT in HA (once) and enters MQTT broker details in the app.
-3. App publishes MQTT discovery config; HA creates `alarm_control_panel.cubxi_alarm`.
+3. App publishes MQTT discovery config; HA creates `alarm_control_panel.latchpoint_alarm`.
 4. App publishes state updates; HA UI reflects them.
 5. User arms/disarms from HA; HA sends command (with code); app validates and transitions.
 

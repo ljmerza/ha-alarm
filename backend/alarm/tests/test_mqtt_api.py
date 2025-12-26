@@ -38,15 +38,15 @@ class MqttApiTests(APITestCase):
                 "password": "supersecret",
                 "use_tls": False,
                 "tls_insecure": False,
-                "client_id": "cubxi-alarm",
+                "client_id": "latchpoint-alarm",
                 "keepalive_seconds": 30,
                 "connect_timeout_seconds": 5,
             },
             home_assistant_alarm_entity={
                 "enabled": True,
-                "entity_name": "Home Alarm",
+                "entity_name": "Latchpoint",
                 "also_rename_in_home_assistant": True,
-                "ha_entity_id": "alarm_control_panel.cubxi_alarm",
+                "ha_entity_id": "alarm_control_panel.latchpoint_alarm",
             },
         )
 

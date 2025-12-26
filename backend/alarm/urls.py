@@ -6,6 +6,11 @@ from . import views
 
 urlpatterns = [
     path("state/", views.AlarmStateView.as_view(), name="alarm-state"),
+    path("zwavejs/status/", views.ZwavejsStatusView.as_view(), name="zwavejs-status"),
+    path("zwavejs/settings/", views.ZwavejsSettingsView.as_view(), name="zwavejs-settings"),
+    path("zwavejs/test/", views.ZwavejsTestConnectionView.as_view(), name="zwavejs-test"),
+    path("zwavejs/entities/sync/", views.ZwavejsEntitySyncView.as_view(), name="zwavejs-entities-sync"),
+    path("zwavejs/set-value/", views.ZwavejsSetValueView.as_view(), name="zwavejs-set-value"),
     path("mqtt/status/", views.MqttStatusView.as_view(), name="mqtt-status"),
     path("mqtt/settings/", views.MqttSettingsView.as_view(), name="mqtt-settings"),
     path("mqtt/test/", views.MqttTestConnectionView.as_view(), name="mqtt-test"),

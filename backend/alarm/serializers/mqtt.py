@@ -54,7 +54,7 @@ class MqttTestConnectionSerializer(serializers.Serializer):
     password = serializers.CharField(required=False, allow_blank=True, default="")
     use_tls = serializers.BooleanField(required=False, default=False)
     tls_insecure = serializers.BooleanField(required=False, default=False)
-    client_id = serializers.CharField(required=False, allow_blank=True, default="cubxi-alarm")
+    client_id = serializers.CharField(required=False, allow_blank=True, default="latchpoint-alarm")
     keepalive_seconds = serializers.IntegerField(required=False, default=30, min_value=5, max_value=3600)
     connect_timeout_seconds = serializers.FloatField(required=False, default=5, min_value=0.5, max_value=30)
 

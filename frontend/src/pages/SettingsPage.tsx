@@ -21,6 +21,7 @@ import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
 import { useHomeAssistantNotifyServices } from '@/hooks/useHomeAssistant'
 import { useUpdateSettingsProfileMutation } from '@/hooks/useSettingsQueries'
 import { useMqttAlarmEntityQuery, useMqttSettingsQuery, useMqttStatusQuery } from '@/hooks/useMqtt'
+import { useZwavejsSettingsQuery, useZwavejsStatusQuery } from '@/hooks/useZwavejs'
 import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 
@@ -83,6 +84,8 @@ export function SettingsPage() {
   const mqttStatusQuery = useMqttStatusQuery()
   const mqttSettingsQuery = useMqttSettingsQuery()
   const mqttEntityQuery = useMqttAlarmEntityQuery()
+  const zwavejsStatusQuery = useZwavejsStatusQuery()
+  const zwavejsSettingsQuery = useZwavejsSettingsQuery()
 
   const settings = settingsQuery.data ?? null
   const isLoading = settingsQuery.isLoading || updateMutation.isPending
@@ -589,6 +592,47 @@ export function SettingsPage() {
                     void mqttStatusQuery.refetch()
                     void mqttSettingsQuery.refetch()
                     void mqttEntityQuery.refetch()
+                  }}
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Z-Wave JS"
+            description="Connect to Z-Wave JS UI / zwave-js-server via WebSocket."
+          >
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Z-Wave status:</span>
+                {zwavejsStatusQuery.data?.connected ? (
+                  <Pill className="text-emerald-600">Connected</Pill>
+                ) : zwavejsStatusQuery.data?.enabled ? (
+                  <Pill className="text-amber-600">Disconnected</Pill>
+                ) : (
+                  <Pill className="text-muted-foreground">Disabled</Pill>
+                )}
+                {zwavejsStatusQuery.data?.lastError ? (
+                  <span className="text-muted-foreground">({zwavejsStatusQuery.data.lastError})</span>
+                ) : null}
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                WebSocket: {zwavejsSettingsQuery.data?.wsUrl ? zwavejsSettingsQuery.data.wsUrl : 'Not configured'}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="button" variant="outline" onClick={() => navigate(Routes.SETUP_ZWAVEJS)} disabled={!isAdmin}>
+                  Configure Z-Wave JS
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    void zwavejsStatusQuery.refetch()
+                    void zwavejsSettingsQuery.refetch()
                   }}
                 >
                   Refresh

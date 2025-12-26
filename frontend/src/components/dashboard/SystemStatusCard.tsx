@@ -9,6 +9,7 @@ import { useWebSocketStatus } from '@/hooks/useWebSocketStatus'
 import { useAlarmStateQuery, useSensorsQuery, useRecentEventsQuery } from '@/hooks/useAlarmQueries'
 import { useHomeAssistantStatus } from '@/hooks/useHomeAssistant'
 import { useMqttStatusQuery } from '@/hooks/useMqtt'
+import { useZwavejsStatusQuery } from '@/hooks/useZwavejs'
 
 function formatTimestamp(value?: string | null): string {
   if (!value) return '—'
@@ -30,6 +31,7 @@ export function SystemStatusCard() {
 
   const haQuery = useHomeAssistantStatus()
   const mqttQuery = useMqttStatusQuery()
+  const zwavejsQuery = useZwavejsStatusQuery()
 
   const ha =
     haQuery.data ??
@@ -38,6 +40,12 @@ export function SystemStatusCard() {
   const mqtt =
     mqttQuery.data ??
     (mqttQuery.isError
+      ? { configured: true, enabled: true, connected: false, lastError: 'Failed to check status' }
+      : null)
+
+  const zwavejs =
+    zwavejsQuery.data ??
+    (zwavejsQuery.isError
       ? { configured: true, enabled: true, connected: false, lastError: 'Failed to check status' }
       : null)
 
@@ -83,6 +91,7 @@ export function SystemStatusCard() {
               void queryClient.invalidateQueries({ queryKey: queryKeys.events.recent })
               void queryClient.invalidateQueries({ queryKey: queryKeys.homeAssistant.status })
               void queryClient.invalidateQueries({ queryKey: queryKeys.mqtt.status })
+              void queryClient.invalidateQueries({ queryKey: queryKeys.zwavejs.status })
             }}
           >
             <RefreshCw />
@@ -114,6 +123,20 @@ export function SystemStatusCard() {
             </div>
             {mqtt.enabled && !mqtt.connected && mqtt.lastError && (
               <div className="mt-1 text-xs text-muted-foreground">{mqtt.lastError}</div>
+            )}
+          </div>
+        )}
+
+        {zwavejs && (
+          <div className="rounded-md border p-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">Z-Wave JS</span>
+              <span className={cn('text-xs', zwavejs.connected ? 'text-emerald-600' : 'text-muted-foreground')}>
+                {!zwavejs.configured ? 'Not configured' : !zwavejs.enabled ? 'Disabled' : zwavejs.connected ? 'Connected' : 'Offline'}
+              </span>
+            </div>
+            {zwavejs.enabled && !zwavejs.connected && zwavejs.lastError && (
+              <div className="mt-1 text-xs text-muted-foreground">{zwavejs.lastError}</div>
             )}
           </div>
         )}

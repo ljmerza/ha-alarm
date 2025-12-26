@@ -12,7 +12,7 @@ DEFAULT_MQTT_CONNECTION: dict[str, object] = {
     "password": "",
     "use_tls": False,
     "tls_insecure": False,
-    "client_id": "cubxi-alarm",
+    "client_id": "latchpoint-alarm",
     "keepalive_seconds": 30,
     "connect_timeout_seconds": 5,
 }

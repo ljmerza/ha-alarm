@@ -6,6 +6,7 @@ from alarm.settings_registry import ALARM_PROFILE_SETTINGS, ALARM_PROFILE_SETTIN
 from .errors import TransitionError
 from alarm.use_cases.settings_profile import ensure_active_settings_profile
 from alarm.mqtt.config import mask_mqtt_connection
+from alarm.zwavejs.config import mask_zwavejs_connection
 
 
 def get_active_settings_profile() -> AlarmSettingsProfile:
@@ -58,6 +59,8 @@ def list_profile_setting_entries(profile: AlarmSettingsProfile) -> list[dict[str
         value = cache.get(definition.key, definition.default)
         if definition.key == "mqtt_connection":
             value = mask_mqtt_connection(value)
+        if definition.key == "zwavejs_connection":
+            value = mask_zwavejs_connection(value)
         out.append(
             {
                 "key": definition.key,

@@ -18,7 +18,7 @@ export function DashboardPage() {
     <Page title="Home" description="Arm/disarm and review recent activity.">
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <FeatureErrorBoundary feature="Alarm Panel" onRetry={handleAlarmRetry}>
+          <FeatureErrorBoundary feature="Latchpoint" onRetry={handleAlarmRetry}>
             <AlarmPanel />
           </FeatureErrorBoundary>
         </div>

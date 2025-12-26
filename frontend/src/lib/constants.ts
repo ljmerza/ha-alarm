@@ -74,6 +74,7 @@ export const Routes = {
   LOGIN: '/login',
   SETUP: '/setup',
   SETUP_MQTT: '/setup/mqtt',
+  SETUP_ZWAVEJS: '/setup/zwavejs',
   SETUP_IMPORT_SENSORS: '/setup/import-sensors',
   DASHBOARD: '/dashboard',
   RULES: '/rules',

@@ -60,11 +60,11 @@ export function SetupMqttPage() {
       password: '',
       useTls: settingsQuery.data.useTls,
       tlsInsecure: settingsQuery.data.tlsInsecure,
-      clientId: settingsQuery.data.clientId || 'cubxi-alarm',
+      clientId: settingsQuery.data.clientId || 'latchpoint-alarm',
       keepaliveSeconds: String(settingsQuery.data.keepaliveSeconds ?? 30),
       connectTimeoutSeconds: String(settingsQuery.data.connectTimeoutSeconds ?? 5),
       alarmEntityEnabled: entityQuery.data.enabled,
-      alarmEntityName: entityQuery.data.entityName || 'Home Alarm',
+      alarmEntityName: entityQuery.data.entityName || 'Latchpoint',
       alsoRenameInHomeAssistant: entityQuery.data.alsoRenameInHomeAssistant ?? true,
     }
   }, [entityQuery.data, settingsQuery.data])
@@ -121,7 +121,7 @@ export function SetupMqttPage() {
         ...(data.password?.trim() ? { password: data.password } : {}),
         useTls: data.useTls,
         tlsInsecure: data.tlsInsecure,
-        clientId: data.clientId?.trim() || 'cubxi-alarm',
+        clientId: data.clientId?.trim() || 'latchpoint-alarm',
         keepaliveSeconds,
         connectTimeoutSeconds,
       })
@@ -153,7 +153,7 @@ export function SetupMqttPage() {
         password: data.password?.trim() || undefined,
         useTls: data.useTls,
         tlsInsecure: data.tlsInsecure,
-        clientId: data.clientId?.trim() || 'cubxi-alarm',
+        clientId: data.clientId?.trim() || 'latchpoint-alarm',
         keepaliveSeconds,
         connectTimeoutSeconds,
       })
@@ -235,7 +235,12 @@ export function SetupMqttPage() {
           </FormField>
 
           <FormField label="Client ID" htmlFor="clientId" required error={errors.clientId?.message}>
-            <Input id="clientId" placeholder="cubxi-alarm" {...register('clientId')} disabled={!isAdmin || isSubmitting} />
+            <Input
+              id="clientId"
+              placeholder="latchpoint-alarm"
+              {...register('clientId')}
+              disabled={!isAdmin || isSubmitting}
+            />
           </FormField>
         </div>
 
@@ -310,7 +315,7 @@ export function SetupMqttPage() {
         <FormField label="Entity name" htmlFor="alarmEntityName" required error={errors.alarmEntityName?.message}>
           <Input
             id="alarmEntityName"
-            placeholder="Home Alarm"
+            placeholder="Latchpoint"
             {...register('alarmEntityName')}
             disabled={!isAdmin || isSubmitting || !watch('alarmEntityEnabled')}
           />

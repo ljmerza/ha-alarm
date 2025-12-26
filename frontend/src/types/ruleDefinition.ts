@@ -93,10 +93,27 @@ export interface HaCallServiceAction {
   service_data?: Record<string, unknown>
 }
 
+export interface ZwavejsSetValueAction {
+  type: 'zwavejs_set_value'
+  node_id: number
+  value_id: {
+    commandClass: number
+    endpoint?: number
+    property: string | number
+    propertyKey?: string | number
+  }
+  value: unknown
+}
+
 /**
  * Union of all action types
  */
-export type ActionNode = AlarmDisarmAction | AlarmTriggerAction | AlarmArmAction | HaCallServiceAction
+export type ActionNode =
+  | AlarmDisarmAction
+  | AlarmTriggerAction
+  | AlarmArmAction
+  | HaCallServiceAction
+  | ZwavejsSetValueAction
 
 // ============================================================================
 // Rule Definition
@@ -219,6 +236,21 @@ export function isHaCallServiceAction(action: unknown): action is HaCallServiceA
   return true
 }
 
+export function isZwavejsSetValueAction(action: unknown): action is ZwavejsSetValueAction {
+  if (!isRecord(action)) return false
+  if (action.type !== 'zwavejs_set_value') return false
+  if (typeof action.node_id !== 'number') return false
+  const valueId = action.value_id
+  if (!isRecord(valueId)) return false
+  if (typeof valueId.commandClass !== 'number') return false
+  if ('endpoint' in valueId && typeof valueId.endpoint !== 'number') return false
+  if (!('property' in valueId)) return false
+  const prop = valueId.property
+  if (!(typeof prop === 'string' || typeof prop === 'number')) return false
+  if ('propertyKey' in valueId && !(typeof valueId.propertyKey === 'string' || typeof valueId.propertyKey === 'number')) return false
+  return true
+}
+
 /**
  * Check if action is a valid ActionNode
  */
@@ -227,7 +259,8 @@ export function isActionNode(action: unknown): action is ActionNode {
     isAlarmDisarmAction(action) ||
     isAlarmTriggerAction(action) ||
     isAlarmArmAction(action) ||
-    isHaCallServiceAction(action)
+    isHaCallServiceAction(action) ||
+    isZwavejsSetValueAction(action)
   )
 }
 

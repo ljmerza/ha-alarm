@@ -172,6 +172,9 @@ if IS_TESTING and not ALLOW_HOME_ASSISTANT_IN_TESTS:
     HOME_ASSISTANT_URL = ""
     HOME_ASSISTANT_TOKEN = ""
 
+# Z-Wave JS integration (configured via alarm-profile settings; connectivity should be test-gated)
+ALLOW_ZWAVEJS_IN_TESTS = env.bool("ALLOW_ZWAVEJS_IN_TESTS", default=False)
+
 HA_LOG_LEVEL = env.str("HA_LOG_LEVEL", default=env.str("LOG_LEVEL", default="INFO")).upper()
 if IS_TESTING and not ALLOW_HOME_ASSISTANT_IN_TESTS:
     HA_LOG_LEVEL = "WARNING"
