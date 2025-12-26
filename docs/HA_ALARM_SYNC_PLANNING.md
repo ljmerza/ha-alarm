@@ -1,536 +1,177 @@
-# Home Assistant Alarm Integration via Webhook (Planning)
+# Home Assistant Alarm Entity (Planning)
+
+## Summary
+Instead of syncing an existing Home Assistant alarm entity (e.g. Alarmo/manual alarm) into this app, the onboarding flow should create/connect a **new Home Assistant `alarm_control_panel` entity** that represents *this app’s* alarm state machine.
+
+Users must be able to **rename the Home Assistant alarm entity from this app’s Settings**, and have that rename reflected in Home Assistant.
+
+Important constraint: Home Assistant entities are created by HA integrations. If we explicitly do **not** ship a Home Assistant custom integration, the practical way to “create an `alarm_control_panel` entity” from this app is **MQTT discovery** (requires HA’s MQTT integration + a broker). This plan assumes MQTT discovery; see `docs/MQTT_INTEGRATION_PLANNING.md`.
 
 ## Goals
-
-- **One-way push**: This app's alarm state machine is authoritative; Home Assistant receives state updates via webhook.
-- **Real-time updates**: On every local state transition, POST the new state to a configured HA webhook URL.
-- **Simple integration**: Users configure a webhook in HA and paste the URL into app settings.
-- **Best-effort delivery**: Retry webhook calls on failure with exponential backoff (optional).
-- **Startup state push**: On app startup, push current state to HA so it recovers from restarts/missed updates.
-- **HA as observer/controller**: HA can display state and trigger automations, and can control the alarm by calling this app's API endpoints.
+- Create/connect a dedicated HA `alarm_control_panel` entity for this app (**one per app instance**).
+- HA entity mirrors this app’s authoritative alarm state (near real-time).
+- HA can arm/disarm the app via supported commands.
+- Onboarding covers everything needed to get HA + app talking.
+- Admins can rename the HA alarm entity from this app at any time.
 
 ## Non-goals (v1)
+- Importing or mapping an existing HA alarm entity into this app.
+- Multiple alarms per single app instance (multi-panel / multi-home).
+- Making HA the source of truth for state.
+- Shipping/maintaining a Home Assistant custom integration.
+- Preserving HA-side name overrides (v1: app can overwrite HA name when requested).
 
-- Bidirectional sync (HA is not authoritative; it only observes and controls via API).
-- Conflict resolution, timestamp comparisons, or pending queues.
-- Polling HA for state changes.
-- Multi-alarm support (one webhook URL per active settings profile only).
+## Why change from “sync existing entity”?
+Syncing an existing HA alarm entity makes it unclear which system is authoritative and increases edge cases (state mapping, arming delays, competing automations). Creating a dedicated HA entity keeps responsibilities crisp:
+- App owns state machine + rules.
+- HA owns dashboards + automations + voice assistants.
+- Integration boundary is commands/events, not shared state.
 
 ## Current repo context
+- HA connectivity helpers exist via `backend/alarm/home_assistant.py` + `backend/alarm/gateways/home_assistant.py` (preferred boundary).
+- Token auth exists for compatibility and non-browser clients; WS `?token=` fallback exists.
+- Frontend already has onboarding and settings patterns (`docs/ONBOARDING_PROCESS_PLANNING.md`).
 
-- HA connectivity exists via `backend/alarm/home_assistant.py` + `backend/alarm/gateways/home_assistant.py`.
-- Frontend already shows HA reachable/offline in `SystemStatusCard` from `/api/alarm/home-assistant/status/`.
-- Local transitions are handled by `backend/alarm/state_machine/*` and are triggered by API endpoints under `backend/alarm/views/*`.
-- There is an existing pattern for "call HA on local state changes" (notifications) scheduled via `transaction.on_commit` and run as a Celery task.
+## Proposed approach (no HA custom integration): MQTT discovery
+Use HA’s built-in MQTT integration and discovery protocol so this app can “create” an `alarm_control_panel` entity in HA by publishing a discovery config payload to the MQTT broker.
 
-## Proposed user-facing behavior
+High-level flow:
+1. User configures MQTT broker in HA (or already has it).
+2. User enables MQTT settings in this app (broker URL + credentials).
+3. This app publishes HA MQTT discovery config for `alarm_control_panel.cubxi_alarm` (or similar stable object id).
+4. This app publishes state updates to a `state_topic`.
+5. HA publishes arm/disarm commands (including the user-entered code) to a `command_topic`.
+6. This app validates the code and executes the transition through its existing API/use cases/state machine.
 
-### Onboarding
+Prerequisites:
+- HA MQTT integration enabled and connected to a broker.
+- This app can connect to the same broker.
 
-- Ask if the user wants to integrate with Home Assistant.
-- If yes:
-  1. Ask for an **entity name** (e.g., "Home Alarm", "Office Alarm") - used for display in HA and logs.
-  2. Provide instructions:
-     - In Home Assistant, create a webhook automation (Automation → New → Webhook trigger).
-     - Copy the webhook URL (e.g., `http://homeassistant.local:8123/api/webhook/alarm_state_webhook_id`).
-     - Paste it into the app's settings.
-     - Optionally create an `input_select.alarm_app_state` helper to mirror the state visually in HA.
-- Save the entity name and webhook URL to the active `AlarmSettingsProfile` settings entries.
+## User-facing behavior
 
-### Settings
+### Onboarding (app)
+Add a “Home Assistant” step focused on MQTT, before setup completes:
+1. **Alarm entity name**: ask for a display name (default: `${home_name} Alarm`).
+2. **MQTT broker**: collect broker connection details (host/port/user/pass/TLS).
+3. Show HA instructions: ensure MQTT integration is set up (one-time), and verify “MQTT discovery” is enabled.
+4. After saving, the app publishes the discovery config and shows “Entity created” when HA is detected as subscribed/online (best-effort).
 
-Provide a "Home Assistant Integration" section:
+If MQTT is skipped, the system remains usable; HA MQTT setup can be completed later from Settings.
 
-- `Enabled` (boolean; default false)
-- `Entity name` (string; e.g., "Home Alarm" - user can rename anytime)
-- `Webhook URL` (string; required when enabled)
-- `Retry on failure` (boolean; default true)
-- Optional: `Timeout seconds` (integer; default 5)
+### Settings (app)
+Add/update a “Home Assistant” (or “Integrations”) section:
+- Enabled toggle
+- MQTT connection settings
+- **Alarm entity name** (editable)
+- Checkbox (default checked): **Also rename in Home Assistant**
+- Entity status (created/online/offline), last seen timestamp, last error
+- “Re-publish discovery config” action (fixes HA discovery drift)
 
-### Dashboard / Status
+### Settings (HA)
+When MQTT is configured:
+- The entity appears under `alarm_control_panel.*` with a stable object id (entity_id should stay stable even if the friendly name changes).
+- The name initially comes from the app (from MQTT discovery config).
+- v1 policy: if “Also rename in Home Assistant” is checked, updating the name in the app re-publishes discovery config with the new name.
 
-- Show:
-  - HA integration: `Disabled` / `Enabled`
-  - If enabled: Last webhook push status (`Success` / `Failed: <error>` / `Pending`)
-  - Last successful push timestamp
+## Identity and rename mechanics
 
-## State mapping
+### Recommended identifiers
+MQTT discovery uses a stable object id; HA assigns an entity_id derived from it:
+- **Discovery object id**: `cubxi_alarm` (stable)
+- **Entity id (HA)**: typically `alarm_control_panel.cubxi_alarm` (stable)
 
-### Local → HA webhook payload
+Do not rely on entity_id drift; if HA entity is deleted, re-publishing discovery recreates it.
 
-On each state transition, POST a JSON payload to the webhook URL:
+### Renaming from the app
+When the user updates “Alarm entity name” in the app:
+1. Update app settings (`entity_name`).
+2. If “Also rename in Home Assistant” is checked, re-publish MQTT discovery config with the updated `name`.
+3. If re-publish fails (broker offline/auth), keep app setting updated and show “Pending rename” with the error.
 
-```json
-{
-  "entity_name": "Home Alarm",
-  "state": "armed_away",
-  "previous_state": "arming",
-  "changed_at": "2025-12-23T10:30:45.123456Z",
-  "triggered_by": "user",
-  "metadata": {
-    "settings_profile_id": 1,
-    "transition_id": "abc123"
-  }
-}
-```
+## Data model (app)
+Define a single-instance settings block (no profiles):
 
-The `entity_name` allows HA automations to identify which alarm sent the update (useful for multi-location setups or clearer logging).
-
-**State values:**
-- `disarmed`
-- `arming`
-- `pending`
-- `triggered`
-- `armed_home`
-- `armed_away`
-- `armed_night`
-- `armed_vacation`
-
-### HA-side setup (user's responsibility)
-
-**Option 1: Update an input_select helper**
-
-Create `input_select.alarm_app_state` in HA with options matching the states above. Webhook automation action:
-
-```yaml
-service: input_select.select_option
-target:
-  entity_id: input_select.alarm_app_state
-data:
-  option: "{{ trigger.json.state }}"
-```
-
-**Option 2: Trigger automations directly**
-
-Use conditions in the webhook automation to trigger actions based on `trigger.json.state`:
-
-```yaml
-trigger:
-  - platform: webhook
-    webhook_id: alarm_state_webhook_id
-action:
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ trigger.json.state == 'triggered' }}"
-        sequence:
-          - service: notify.mobile_app
-            data:
-              message: "Alarm triggered!"
-      - conditions:
-          - condition: template
-            value_template: "{{ trigger.json.state == 'armed_away' }}"
-        sequence:
-          - service: light.turn_off
-            target:
-              entity_id: all
-```
-
-**Controlling the alarm from HA:**
-
-Users can call this app's API endpoints from HA automations/scripts:
-
-```yaml
-service: rest_command.alarm_arm_away
-data: {}
-```
-
-Where `rest_command.alarm_arm_away` is configured in HA's `configuration.yaml`:
-
-```yaml
-rest_command:
-  alarm_arm_away:
-    url: "http://alarm-app.local/api/alarm/arm/away/"
-    method: POST
-    headers:
-      Authorization: "Bearer <app_api_token>"
-      Content-Type: "application/json"
-```
-
-## Backend design
-
-### Settings (profile setting)
-
-Add `home_assistant_integration` to `backend/alarm/settings_registry.py` (JSON):
-
+`home_assistant_alarm_entity` (JSON)
 ```json
 {
   "enabled": false,
   "entity_name": "Home Alarm",
-  "webhook_url": "",
-  "retry_on_failure": true,
-  "timeout_seconds": 5
+  "also_rename_in_home_assistant": true,
+  "ha_entity_id": "alarm_control_panel.cubxi_alarm",
+  "last_seen_at": null,
+  "last_error": null
 }
 ```
 
-Expose it in `backend/alarm/serializers/alarm.py` so the frontend can read/update it through existing settings profile endpoints.
+MQTT connection settings:
+- `mqtt_connection`: `{ "host": "...", "port": 1883, "username": "...", "password": "...", "use_tls": false }`
 
-### Webhook push task
+## App API surface
+Thin views + use cases (per `docs/adr/0005-thin-views-and-use-cases.md`):
+- `GET /api/alarm/home-assistant/status/` (MQTT connection + entity publish status)
+- `POST /api/alarm/home-assistant/test/` (test MQTT connection; optional)
+- `POST /api/alarm/home-assistant/publish-discovery/` (re-publish discovery config)
+- `PATCH /api/alarm/home-assistant/entity-name/` (update name; optionally re-publish discovery)
 
-Create a Celery task in `backend/alarm/tasks.py`:
+## MQTT topic design
+Choose one stable base topic per app instance:
+- Discovery: `homeassistant/alarm_control_panel/cubxi_alarm/config`
+- State: `cubxi_alarm/alarm/state`
+- Command: `cubxi_alarm/alarm/command`
+- Availability (optional): `cubxi_alarm/alarm/availability`
 
-```python
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def push_alarm_state_to_home_assistant(
-    self,
-    settings_profile_id: int,
-    state: str,
-    previous_state: str,
-    changed_at: str,
-    triggered_by: str,
-    transition_id: str
-):
-    """
-    POST alarm state to HA webhook.
+Discovery payload should:
+- Set `name` from app setting
+- Provide `state_topic`, `command_topic`, and (recommended) `availability_topic`
+- Use a `command_template` that includes both action and code in JSON, so the app can validate user-entered codes
 
-    Retries on failure with exponential backoff if retry_on_failure is enabled.
-    """
-    # Load settings (includes entity_name, webhook_url, etc.)
-    # Build payload with entity_name, state, previous_state, changed_at, triggered_by, metadata
-    # POST to webhook_url with timeout
-    # On success: log, update last_push_success_at
-    # On failure: log error, retry if enabled, update last_push_error
-```
+## Commands + “HA user must enter alarm code”
+Requirement: HA user must enter the alarm code for disarm.
 
-**Tracking last push status (optional model):**
+Approach:
+- Configure the MQTT alarm entity so HA always prompts for a code, and publishes commands including the code (via `command_template`).
+- This app validates the code using the same rules as the normal disarm endpoint and rejects invalid codes.
 
-Add a simple model to track webhook push status per settings profile (for UI display):
+## Onboarding flow details
 
-- `settings_profile` (FK, unique)
-- `webhook_url` (string, denormalized for debugging)
-- `last_push_attempt_at` (datetime/null)
-- `last_push_success_at` (datetime/null)
-- `last_push_error` (text/null)
-- `last_pushed_state` (string/null)
+### Happy path
+1. User completes app onboarding, enables HA, enters desired alarm name.
+2. User configures MQTT in HA (once) and enters MQTT broker details in the app.
+3. App publishes MQTT discovery config; HA creates `alarm_control_panel.cubxi_alarm`.
+4. App publishes state updates; HA UI reflects them.
+5. User arms/disarms from HA; HA sends command (with code); app validates and transitions.
 
-This keeps API responses fast and enables UI display of push status without checking task results.
+### Entity not found
+If HA doesn’t show the entity:
+- Verify HA MQTT integration is connected and discovery is enabled.
+- Verify broker connection details in the app.
+- Use “Re-publish discovery config”.
 
-### Where to trigger the webhook push
-
-In the state machine transition handler (likely `backend/alarm/state_machine/manager.py` or similar), after a successful transition:
-
-```python
-from django.db import transaction
-
-def transition_to_state(state, triggered_by, metadata):
-    # ... perform transition ...
-
-    # After commit, push to HA webhook if enabled
-    transaction.on_commit(lambda: push_alarm_state_to_home_assistant.delay(
-        settings_profile_id=current_profile.id,
-        state=new_state,
-        previous_state=old_state,
-        changed_at=snapshot.entered_at.isoformat(),
-        triggered_by=triggered_by,
-        transition_id=transition_id
-    ))
-```
-
-**Skip webhook push for certain transitions:**
-
-Optionally, allow metadata to skip webhook push (e.g., if in the future we do accept inbound HA calls, we wouldn't echo back).
-
-### Startup state push
-
-On app startup, push the current alarm state to HA webhook to ensure HA has the correct state after:
-- HA restarts (missed webhooks while HA was down)
-- App restarts (HA might have stale state)
-- Network issues (missed webhooks)
-
-**Implementation options:**
-
-**Option A: Django AppConfig.ready() (recommended)**
-
-In `backend/alarm/apps.py`:
-
-```python
-from django.apps import AppConfig
-
-class AlarmConfig(AppConfig):
-    name = 'alarm'
-
-    def ready(self):
-        # Import here to avoid circular imports
-        from django.db import connection
-
-        # Only run if database is ready (not during migrations)
-        if connection.ensure_connection():
-            from alarm.tasks import push_current_state_to_home_assistant_on_startup
-            # Delay slightly to ensure Celery is ready
-            push_current_state_to_home_assistant_on_startup.apply_async(countdown=5)
-```
-
-**Option B: Management command**
-
-Create `backend/alarm/management/commands/push_ha_state.py`:
-
-```python
-from django.core.management.base import BaseCommand
-from alarm.tasks import push_current_state_to_home_assistant
-
-class Command(BaseCommand):
-    help = 'Push current alarm state to Home Assistant webhook'
-
-    def handle(self, *args, **options):
-        push_current_state_to_home_assistant()
-        self.stdout.write(self.style.SUCCESS('State pushed to HA webhook'))
-```
-
-Call from container entrypoint or systemd service after app starts.
-
-**Startup push task:**
-
-```python
-@shared_task
-def push_current_state_to_home_assistant_on_startup():
-    """
-    Push current alarm state to HA webhook on app startup.
-
-    This ensures HA has the correct state after restarts.
-    """
-    from alarm.models import AlarmSettingsProfile, AlarmStateSnapshot
-
-    for profile in AlarmSettingsProfile.objects.filter(is_active=True):
-        settings = profile.get_setting('home_assistant_integration')
-        if not settings or not settings.get('enabled'):
-            continue
-
-        snapshot = AlarmStateSnapshot.objects.filter(
-            settings_profile=profile
-        ).order_by('-entered_at').first()
-
-        if snapshot:
-            push_alarm_state_to_home_assistant.delay(
-                settings_profile_id=profile.id,
-                state=snapshot.state,
-                previous_state=None,  # Unknown on startup
-                changed_at=snapshot.entered_at.isoformat(),
-                triggered_by='startup_sync',
-                transition_id=f'startup_{profile.id}'
-            )
-```
-
-## Frontend design
-
-### Types + services
-
-- Extend `AlarmSettingsProfile` typing to include `homeAssistantIntegration`:
-  ```typescript
-  interface HomeAssistantIntegration {
-    enabled: boolean;
-    entityName: string;
-    webhookUrl: string;
-    retryOnFailure: boolean;
-    timeoutSeconds: number;
-  }
-  ```
-- Add UI form controls in `SettingsPage`:
-  - Entity name input (text field, e.g., "Home Alarm")
-  - Webhook URL input (text field with validation)
-- Provide onboarding step to collect entity name and webhook URL.
-
-### Status display
-
-Extend `SystemStatusCard` to show:
-- Integration enabled/disabled
-- If enabled:
-  - Last push: `Success (2 minutes ago)` / `Failed: Connection timeout` / `Pending`
-  - Show retry status if applicable
-
-### Input validation
-
-**Entity name:**
-- Required when integration is enabled
-- Min 1 character, max 50 characters
-- Alphanumeric, spaces, and basic punctuation allowed
-
-**Webhook URL:**
-
-Client-side validation:
-- Must be a valid URL
-- Should start with `http://` or `https://`
-- Should contain `/api/webhook/`
-
-Server-side validation:
-- Same checks
-- Optional: test webhook on save (POST a test payload, check for 200 response)
-
-## Security and safety
-
-- **No HA credentials stored**: Webhooks are public URLs with secret IDs; no auth token needed.
-- **Webhook ID secrecy**: The webhook ID in the URL is the secret; treat it like a password (don't log full URLs).
-- **HTTPS recommended**: Encourage users to use HTTPS if HA is exposed outside local network.
-- **Validate settings permissions**: Ensure only admins can change integration settings (match existing settings permission behavior).
-- **Rate limiting**: Consider rate-limiting webhook calls to prevent abuse if URL leaks.
-
-## Observability
-
-Log key events:
-- Webhook push attempts (log state, profile ID, success/failure)
-- Webhook push failures (log error, retry count)
-- Webhook URL changes (audit log)
-
-Include `settings_profile_id` and sanitized `webhook_url` (mask webhook ID) in logs.
-
-Example:
-```
-INFO: Pushed state 'armed_away' to HA webhook (profile=1, url=http://***.***.***.***:8123/api/webhook/***...***, status=200)
-ERROR: Failed to push state 'triggered' to HA webhook (profile=1, error=Connection timeout, retry=1/3)
-```
+## Security + safety
+- Never log MQTT passwords or command payload codes.
+- Restrict MQTT settings and rename actions to admins.
+- Keep code validation identical to the app’s standard keypad/API path.
 
 ## Testing plan
+Backend:
+- Unit tests for discovery payload generation (stable topics/object id; name handling).
+- Unit tests for rename flow: checkbox on/off; broker failure → pending error state.
+- Unit tests for MQTT command handling: valid vs invalid code; correct transition calls.
+- API tests verifying only admins can edit MQTT settings/rename.
 
-### Backend
+## Migration / rollout
+If prior installs used webhook mirroring or “sync existing entity”:
+- Keep old settings keys readable for one release; auto-migrate to `home_assistant_alarm_entity`.
+- UI notice: “HA integration model changed; MQTT is now used to create the HA alarm entity.”
 
-- **Unit tests for payload construction**:
-  - Verify JSON payload format
-  - Verify state mapping
+## Acceptance criteria
+- Fresh install onboarding can end with a working `alarm_control_panel` entity in HA that mirrors state and can arm/disarm (within defined safety constraints).
+- App Settings allow renaming the alarm entity and HA reflects the new name quickly (or shows a clear pending/error status).
+- If HA is offline, the app remains usable and surfaces HA status clearly.
 
-- **Task tests** (using `override_settings(CELERY_TASK_ALWAYS_EAGER=True)`):
-  - Mock `requests.post` to simulate success/failure
-  - Verify retries on failure
-  - Verify last push status model updates
-
-- **Integration tests**:
-  - Trigger state transition, verify webhook task is enqueued
-  - Verify task not enqueued when integration disabled
-  - Verify task not enqueued for certain metadata (if skip logic added)
-
-- **Startup push tests**:
-  - Verify startup task pushes current state for all active profiles with integration enabled
-  - Verify startup task skips profiles with integration disabled
-  - Verify startup task handles missing snapshot gracefully
-
-### Frontend
-
-- **Settings page**:
-  - Smoke tests for form parsing/serialization of `homeAssistantIntegration`
-  - Validation tests (invalid URLs rejected)
-
-- **Manual verification**:
-  - Set up real HA webhook, trigger transitions, verify HA receives payloads
-  - Test with unreachable webhook URL, verify failure status displayed
-
-### HA-side testing
-
-Create a test webhook automation in HA that logs received payloads:
-
-```yaml
-trigger:
-  - platform: webhook
-    webhook_id: alarm_test_webhook
-action:
-  - service: persistent_notification.create
-    data:
-      title: "{{ trigger.json.entity_name }} Update"
-      message: "State: {{ trigger.json.state }}, Changed at: {{ trigger.json.changed_at }}"
-```
-
-## Rollout / ops notes
-
-- **Celery worker required**: Webhook push uses Celery tasks; ensure a worker is running.
-- **Webhook setup documentation**: Provide clear docs with HA YAML examples for webhook automation + `input_select` setup.
-- **Migration**: If users previously expected HA → app sync, clarify that this is now one-way (app → HA) and HA controls the app via API.
-- **Future enhancements**:
-  - Support multiple webhook URLs (broadcast to multiple HA instances)
-  - Webhook signature/HMAC for verification (if HA supports it)
-  - Fallback to MQTT if webhook fails repeatedly
-
-## Example HA Configuration
-
-### Full working example
-
-**1. Create input_select helper** (`configuration.yaml`):
-
-```yaml
-input_select:
-  alarm_app_state:
-    name: Alarm App State
-    options:
-      - disarmed
-      - arming
-      - pending
-      - triggered
-      - armed_home
-      - armed_away
-      - armed_night
-      - armed_vacation
-    icon: mdi:shield-home
-```
-
-**2. Create webhook automation** (via UI or `automations.yaml`):
-
-```yaml
-- id: alarm_app_webhook
-  alias: "Alarm App State Webhook"
-  trigger:
-    - platform: webhook
-      webhook_id: my_secret_alarm_webhook_id
-  action:
-    - service: input_select.select_option
-      target:
-        entity_id: input_select.alarm_app_state
-      data:
-        option: "{{ trigger.json.state }}"
-    - service: logbook.log
-      data:
-        name: "{{ trigger.json.entity_name }}"
-        message: "State changed to {{ trigger.json.state }}"
-```
-
-**3. Create REST commands for control** (`configuration.yaml`):
-
-```yaml
-rest_command:
-  alarm_disarm:
-    url: "http://192.168.1.100:8000/api/alarm/disarm/"
-    method: POST
-    headers:
-      Authorization: "Bearer YOUR_APP_API_TOKEN"
-      Content-Type: "application/json"
-
-  alarm_arm_home:
-    url: "http://192.168.1.100:8000/api/alarm/arm/home/"
-    method: POST
-    headers:
-      Authorization: "Bearer YOUR_APP_API_TOKEN"
-      Content-Type: "application/json"
-
-  alarm_arm_away:
-    url: "http://192.168.1.100:8000/api/alarm/arm/away/"
-    method: POST
-    headers:
-      Authorization: "Bearer YOUR_APP_API_TOKEN"
-      Content-Type: "application/json"
-```
-
-**4. Configure webhook URL in app settings**:
-
-```
-http://homeassistant.local:8123/api/webhook/my_secret_alarm_webhook_id
-```
-
-**5. Use in HA automations**:
-
-```yaml
-- id: alarm_triggered_notification
-  alias: "Send notification when alarm triggered"
-  trigger:
-    - platform: state
-      entity_id: input_select.alarm_app_state
-      to: "triggered"
-  action:
-    - service: notify.mobile_app
-      data:
-        title: "Alarm Triggered!"
-        message: "{{ state_attr('input_select.alarm_app_state', 'friendly_name') }} triggered at {{ now().strftime('%H:%M:%S') }}"
-
-- id: arm_away_when_leaving
-  alias: "Arm away when everyone leaves"
-  trigger:
-    - platform: state
-      entity_id: zone.home
-      to: "0"
-  action:
-    - service: rest_command.alarm_arm_away
-```
+## Implementation tasks (suggested order)
+1. Define singleton settings schema for `home_assistant_alarm_entity` + `mqtt_connection`.
+2. Implement MQTT client/service: publish discovery + publish state + subscribe to command topic.
+3. Add onboarding step + settings UI (entity name, “also rename in HA” checkbox, MQTT config).
+4. Wire MQTT command handling to existing alarm arm/disarm use cases (disarm requires code).
+5. Add end-user docs for HA MQTT prerequisites + troubleshooting.

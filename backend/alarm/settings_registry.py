@@ -108,6 +108,36 @@ ALARM_PROFILE_SETTINGS: list[SettingDefinition] = [
         },
         description="Send Home Assistant notify.* messages on selected alarm state changes.",
     ),
+    SettingDefinition(
+        key="mqtt_connection",
+        name="MQTT connection",
+        value_type=SystemConfigValueType.JSON,
+        default={
+            "enabled": False,
+            "host": "",
+            "port": 1883,
+            "username": "",
+            "password": "",
+            "use_tls": False,
+            "tls_insecure": False,
+            "client_id": "cubxi-alarm",
+            "keepalive_seconds": 30,
+            "connect_timeout_seconds": 5,
+        },
+        description="MQTT broker connection settings for Home Assistant MQTT discovery and commands.",
+    ),
+    SettingDefinition(
+        key="home_assistant_alarm_entity",
+        name="Home Assistant alarm entity",
+        value_type=SystemConfigValueType.JSON,
+        default={
+            "enabled": False,
+            "entity_name": "Home Alarm",
+            "also_rename_in_home_assistant": True,
+            "ha_entity_id": "alarm_control_panel.cubxi_alarm",
+        },
+        description="Home Assistant alarm entity settings (MQTT discovery).",
+    ),
 ]
 
 ALARM_PROFILE_SETTINGS_BY_KEY = {d.key: d for d in ALARM_PROFILE_SETTINGS}

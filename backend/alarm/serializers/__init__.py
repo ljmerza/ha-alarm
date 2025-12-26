@@ -13,6 +13,13 @@ from .entities import EntitySerializer
 from .rules import RuleSerializer, RuleUpsertSerializer
 from .sensors import SensorCreateSerializer, SensorSerializer, SensorUpdateSerializer
 from .system_config import SystemConfigCreateSerializer, SystemConfigSerializer, SystemConfigUpdateSerializer
+from .mqtt import (
+    HomeAssistantAlarmEntitySettingsSerializer,
+    HomeAssistantAlarmEntitySettingsUpdateSerializer,
+    MqttConnectionSettingsSerializer,
+    MqttConnectionSettingsUpdateSerializer,
+    MqttTestConnectionSerializer,
+)
 
 __all__ = [
     "AlarmEventSerializer",
@@ -31,4 +38,9 @@ __all__ = [
     "SystemConfigCreateSerializer",
     "SystemConfigSerializer",
     "SystemConfigUpdateSerializer",
+    "MqttConnectionSettingsSerializer",
+    "MqttConnectionSettingsUpdateSerializer",
+    "MqttTestConnectionSerializer",
+    "HomeAssistantAlarmEntitySettingsSerializer",
+    "HomeAssistantAlarmEntitySettingsUpdateSerializer",
 ]

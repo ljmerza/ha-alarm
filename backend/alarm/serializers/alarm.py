@@ -3,6 +3,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from alarm.models import AlarmEvent, AlarmSettingsProfile, AlarmStateSnapshot
+from alarm.mqtt.config import mask_mqtt_connection
 from alarm.state_machine.settings import get_setting_bool, get_setting_int, get_setting_json, list_profile_setting_entries
 
 
@@ -53,6 +54,8 @@ class AlarmSettingsProfileSerializer(serializers.Serializer):
     audio_visual_settings = serializers.JSONField(read_only=True)
     sensor_behavior = serializers.JSONField(read_only=True)
     home_assistant_notify = serializers.JSONField(read_only=True)
+    mqtt_connection = serializers.JSONField(read_only=True)
+    home_assistant_alarm_entity = serializers.JSONField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
@@ -70,6 +73,8 @@ class AlarmSettingsProfileSerializer(serializers.Serializer):
                 "audio_visual_settings": get_setting_json(instance, "audio_visual_settings") or {},
                 "sensor_behavior": get_setting_json(instance, "sensor_behavior") or {},
                 "home_assistant_notify": get_setting_json(instance, "home_assistant_notify") or {},
+                "mqtt_connection": mask_mqtt_connection(get_setting_json(instance, "mqtt_connection") or {}),
+                "home_assistant_alarm_entity": get_setting_json(instance, "home_assistant_alarm_entity") or {},
             }
         )
         return meta

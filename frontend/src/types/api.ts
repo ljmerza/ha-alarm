@@ -100,6 +100,11 @@ export const queryKeys = {
   websocket: {
     status: ['websocket', 'status'] as const,
   },
+  mqtt: {
+    status: ['mqtt', 'status'] as const,
+    settings: ['mqtt', 'settings'] as const,
+    alarmEntity: ['mqtt', 'alarmEntity'] as const,
+  },
   onboarding: {
     status: ['onboarding', 'status'] as const,
     setupStatus: ['onboarding', 'setupStatus'] as const,

@@ -8,6 +8,13 @@ from .home_assistant import (
     HomeAssistantNotifyServicesView,
     HomeAssistantStatusView,
 )
+from .mqtt import (
+    HomeAssistantAlarmEntitySettingsView,
+    MqttPublishDiscoveryView,
+    MqttSettingsView,
+    MqttStatusView,
+    MqttTestConnectionView,
+)
 from .rules import RuleDetailView, RuleRunView, RuleSimulateView, RulesView
 from .sensors import SensorDetailView, SensorsView
 from .settings import AlarmSettingsView
@@ -36,6 +43,11 @@ __all__ = [
     "HomeAssistantEntitiesView",
     "HomeAssistantNotifyServicesView",
     "HomeAssistantStatusView",
+    "MqttSettingsView",
+    "MqttStatusView",
+    "MqttTestConnectionView",
+    "MqttPublishDiscoveryView",
+    "HomeAssistantAlarmEntitySettingsView",
     "RuleDetailView",
     "RuleRunView",
     "RuleSimulateView",

@@ -8,6 +8,7 @@ import { queryKeys } from '@/types'
 import { useWebSocketStatus } from '@/hooks/useWebSocketStatus'
 import { useAlarmStateQuery, useSensorsQuery, useRecentEventsQuery } from '@/hooks/useAlarmQueries'
 import { useHomeAssistantStatus } from '@/hooks/useHomeAssistant'
+import { useMqttStatusQuery } from '@/hooks/useMqtt'
 
 function formatTimestamp(value?: string | null): string {
   if (!value) return '—'
@@ -28,10 +29,17 @@ export function SystemStatusCard() {
   const isLoading = alarmStateQuery.isFetching || sensorsQuery.isFetching || recentEventsQuery.isFetching
 
   const haQuery = useHomeAssistantStatus()
+  const mqttQuery = useMqttStatusQuery()
 
   const ha =
     haQuery.data ??
     (haQuery.isError ? { configured: true, reachable: false, error: 'Failed to check status' } : null)
+
+  const mqtt =
+    mqttQuery.data ??
+    (mqttQuery.isError
+      ? { configured: true, enabled: true, connected: false, lastError: 'Failed to check status' }
+      : null)
 
   const statusLabel = useMemo(() => {
     switch (wsStatus) {
@@ -74,6 +82,7 @@ export function SystemStatusCard() {
               void queryClient.invalidateQueries({ queryKey: queryKeys.sensors.all })
               void queryClient.invalidateQueries({ queryKey: queryKeys.events.recent })
               void queryClient.invalidateQueries({ queryKey: queryKeys.homeAssistant.status })
+              void queryClient.invalidateQueries({ queryKey: queryKeys.mqtt.status })
             }}
           >
             <RefreshCw />
@@ -91,6 +100,20 @@ export function SystemStatusCard() {
             </div>
             {ha.configured && !ha.reachable && ha.error && (
               <div className="mt-1 text-xs text-muted-foreground">{ha.error}</div>
+            )}
+          </div>
+        )}
+
+        {mqtt && (
+          <div className="rounded-md border p-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">MQTT</span>
+              <span className={cn('text-xs', mqtt.connected ? 'text-emerald-600' : 'text-muted-foreground')}>
+                {!mqtt.configured ? 'Not configured' : !mqtt.enabled ? 'Disabled' : mqtt.connected ? 'Connected' : 'Offline'}
+              </span>
+            </div>
+            {mqtt.enabled && !mqtt.connected && mqtt.lastError && (
+              <div className="mt-1 text-xs text-muted-foreground">{mqtt.lastError}</div>
             )}
           </div>
         )}

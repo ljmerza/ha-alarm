@@ -6,6 +6,11 @@ from . import views
 
 urlpatterns = [
     path("state/", views.AlarmStateView.as_view(), name="alarm-state"),
+    path("mqtt/status/", views.MqttStatusView.as_view(), name="mqtt-status"),
+    path("mqtt/settings/", views.MqttSettingsView.as_view(), name="mqtt-settings"),
+    path("mqtt/test/", views.MqttTestConnectionView.as_view(), name="mqtt-test"),
+    path("mqtt/publish-discovery/", views.MqttPublishDiscoveryView.as_view(), name="mqtt-publish-discovery"),
+    path("mqtt/alarm-entity/", views.HomeAssistantAlarmEntitySettingsView.as_view(), name="mqtt-alarm-entity"),
     path("home-assistant/status/", views.HomeAssistantStatusView.as_view(), name="ha-status"),
     path("home-assistant/entities/", views.HomeAssistantEntitiesView.as_view(), name="ha-entities"),
     path(

@@ -119,6 +119,29 @@ class AlarmSettingsEntry(models.Model):
         return f"{self.profile_id}:{self.key}"
 
 
+class MqttIntegrationStatus(models.Model):
+    """
+    Persisted status for MQTT + HA alarm entity publishing.
+
+    This intentionally stores only timestamps and error summaries (no secrets).
+    """
+
+    profile = models.OneToOneField(
+        AlarmSettingsProfile,
+        on_delete=models.CASCADE,
+        related_name="mqtt_status",
+    )
+    last_discovery_publish_at = models.DateTimeField(null=True, blank=True)
+    last_state_publish_at = models.DateTimeField(null=True, blank=True)
+    last_availability_publish_at = models.DateTimeField(null=True, blank=True)
+    last_error_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:  # pragma: no cover - simple representation
+        return f"{self.profile_id}:mqtt_status"
+
+
 class Sensor(models.Model):
     name = models.CharField(max_length=150)
     entity_id = models.CharField(max_length=255, blank=True)

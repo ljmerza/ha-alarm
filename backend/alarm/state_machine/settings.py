@@ -5,6 +5,7 @@ from alarm.settings_registry import ALARM_PROFILE_SETTINGS, ALARM_PROFILE_SETTIN
 
 from .errors import TransitionError
 from alarm.use_cases.settings_profile import ensure_active_settings_profile
+from alarm.mqtt.config import mask_mqtt_connection
 
 
 def get_active_settings_profile() -> AlarmSettingsProfile:
@@ -54,12 +55,15 @@ def list_profile_setting_entries(profile: AlarmSettingsProfile) -> list[dict[str
     cache = _settings_cache(profile)
     out: list[dict[str, object]] = []
     for definition in ALARM_PROFILE_SETTINGS:
+        value = cache.get(definition.key, definition.default)
+        if definition.key == "mqtt_connection":
+            value = mask_mqtt_connection(value)
         out.append(
             {
                 "key": definition.key,
                 "name": definition.name,
                 "value_type": definition.value_type,
-                "value": cache.get(definition.key, definition.default),
+                "value": value,
                 "description": definition.description,
             }
         )

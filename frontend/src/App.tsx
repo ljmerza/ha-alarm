@@ -15,6 +15,7 @@ import { useGlobalQueryErrorHandler } from '@/hooks/useQueryErrorHandler'
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const OnboardingPage = lazy(() => import('@/pages/OnboardingPage'))
 const SetupWizardPage = lazy(() => import('@/pages/SetupWizardPage'))
+const SetupMqttPage = lazy(() => import('@/pages/SetupMqttPage'))
 const ImportSensorsPage = lazy(() => import('@/pages/ImportSensorsPage'))
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const RulesPage = lazy(() => import('@/pages/RulesPage'))
@@ -91,6 +92,7 @@ function AppContent() {
             }
           >
             <Route path={AppRoutes.SETUP} element={<SetupWizardPage />} />
+            <Route path={AppRoutes.SETUP_MQTT} element={<SetupMqttPage />} />
             <Route path={AppRoutes.SETUP_IMPORT_SENSORS} element={<ImportSensorsPage />} />
             <Route path={AppRoutes.HOME} element={<DashboardPage />} />
             <Route path={AppRoutes.RULES} element={<RulesPage />} />

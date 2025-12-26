@@ -14,12 +14,14 @@ import { IconButton } from '@/components/ui/icon-button'
 import { Pill } from '@/components/ui/pill'
 import { getErrorMessage } from '@/types/errors'
 import { isRecord } from '@/lib/typeGuards'
-import { AlarmState, AlarmStateLabels, type AlarmStateType, UserRole } from '@/lib/constants'
+import { AlarmState, AlarmStateLabels, Routes, type AlarmStateType, UserRole } from '@/lib/constants'
 import type { AlarmSettingsProfile } from '@/types'
 import { useAlarmSettingsQuery } from '@/hooks/useAlarmQueries'
 import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
 import { useHomeAssistantNotifyServices } from '@/hooks/useHomeAssistant'
 import { useUpdateSettingsProfileMutation } from '@/hooks/useSettingsQueries'
+import { useMqttAlarmEntityQuery, useMqttSettingsQuery, useMqttStatusQuery } from '@/hooks/useMqtt'
+import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 
 type SettingsDraft = {
@@ -71,12 +73,16 @@ const ARM_MODE_TOOLTIPS: Record<AlarmStateType, string> = {
 }
 
 export function SettingsPage() {
+  const navigate = useNavigate()
   const currentUserQuery = useCurrentUserQuery()
   const isAdmin = currentUserQuery.data?.role === UserRole.ADMIN
 
   const settingsQuery = useAlarmSettingsQuery()
   const haNotifyServicesQuery = useHomeAssistantNotifyServices()
   const updateMutation = useUpdateSettingsProfileMutation()
+  const mqttStatusQuery = useMqttStatusQuery()
+  const mqttSettingsQuery = useMqttSettingsQuery()
+  const mqttEntityQuery = useMqttAlarmEntityQuery()
 
   const settings = settingsQuery.data ?? null
   const isLoading = settingsQuery.isLoading || updateMutation.isPending
@@ -540,6 +546,54 @@ export function SettingsPage() {
                   })}
                 </div>
               </FormField>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Home Assistant (MQTT)"
+            description="Create and control the Home Assistant alarm entity via MQTT discovery."
+          >
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted-foreground">MQTT status:</span>
+                {mqttStatusQuery.data?.connected ? (
+                  <Pill className="text-emerald-600">Connected</Pill>
+                ) : mqttStatusQuery.data?.enabled ? (
+                  <Pill className="text-amber-600">Disconnected</Pill>
+                ) : (
+                  <Pill className="text-muted-foreground">Disabled</Pill>
+                )}
+                {mqttStatusQuery.data?.lastError ? (
+                  <span className="text-muted-foreground">({mqttStatusQuery.data.lastError})</span>
+                ) : null}
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                Broker:{' '}
+                {mqttSettingsQuery.data?.host
+                  ? `${mqttSettingsQuery.data.host}:${mqttSettingsQuery.data.port}`
+                  : 'Not configured'}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Alarm entity: {mqttEntityQuery.data?.enabled ? mqttEntityQuery.data.haEntityId : 'Disabled'}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="button" variant="outline" onClick={() => navigate(Routes.SETUP_MQTT)} disabled={!isAdmin}>
+                  Configure MQTT
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    void mqttStatusQuery.refetch()
+                    void mqttSettingsQuery.refetch()
+                    void mqttEntityQuery.refetch()
+                  }}
+                >
+                  Refresh
+                </Button>
+              </div>
             </div>
           </SectionCard>
         </div>

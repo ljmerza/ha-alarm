@@ -73,7 +73,7 @@ export function SetupWizardPage() {
         reauthPassword: data.reauthPassword,
       })
       await queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.setupStatus })
-      navigate(Routes.HOME, { replace: true })
+      navigate(Routes.SETUP_MQTT, { replace: true })
     } catch (err) {
       setError(getErrorMessage(err) || 'Failed to create code')
     }

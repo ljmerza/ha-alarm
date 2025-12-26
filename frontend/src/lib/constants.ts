@@ -73,6 +73,7 @@ export const Routes = {
   ONBOARDING: '/onboarding',
   LOGIN: '/login',
   SETUP: '/setup',
+  SETUP_MQTT: '/setup/mqtt',
   SETUP_IMPORT_SENSORS: '/setup/import-sensors',
   DASHBOARD: '/dashboard',
   RULES: '/rules',
