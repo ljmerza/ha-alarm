@@ -4,8 +4,10 @@ from datetime import datetime, timezone as dt_timezone
 
 from django.test import TestCase
 
+from alarm.models import AlarmSettingsProfile
 from alarm.models import Rule
 from alarm.rules.action_executor import execute_actions
+from alarm.tests.settings_test_utils import set_profile_settings
 
 
 class _Snapshot:
@@ -94,3 +96,41 @@ class ActionExecutorTests(TestCase):
         result = execute_actions(rule=rule, actions=[{"type": "ha_call_service", "domain": 1}], now=now, alarm_services=alarm_services, ha=ha)
         self.assertEqual(result["actions"][0]["error"], "missing_domain_or_service")
 
+    def test_execute_actions_supports_zwavejs_set_value_shape(self):
+        class _Zwavejs:
+            def __init__(self):
+                self.calls = []
+
+            def apply_settings(self, *, settings_obj):
+                self.calls.append(("apply_settings", settings_obj))
+
+            def ensure_connected(self, *, timeout_seconds: float = 5.0):
+                self.calls.append(("ensure_connected", timeout_seconds))
+
+            def set_value(self, *, node_id: int, endpoint: int, command_class: int, property, value, property_key=None):
+                self.calls.append(("set_value", node_id, endpoint, command_class, property, property_key, value))
+
+        profile = AlarmSettingsProfile.objects.create(name="Default", is_active=True)
+        set_profile_settings(profile, zwavejs_connection={"enabled": True, "ws_url": "ws://zwavejs.local:3000"})
+
+        rule = Rule.objects.create(name="R", kind="trigger", enabled=True, priority=0, schema_version=1, definition={})
+        alarm_services = _AlarmServices()
+        zwave = _Zwavejs()
+        now = datetime(2025, 1, 1, tzinfo=dt_timezone.utc)
+        result = execute_actions(
+            rule=rule,
+            actions=[
+                {
+                    "type": "zwavejs_set_value",
+                    "node_id": 12,
+                    "value_id": {"commandClass": 49, "endpoint": 0, "property": "targetValue"},
+                    "value": True,
+                }
+            ],
+            now=now,
+            alarm_services=alarm_services,
+            ha=_HA(),
+            zwavejs=zwave,
+        )
+        self.assertEqual(result["actions"][0]["ok"], True)
+        self.assertEqual(zwave.calls[-1][0], "set_value")

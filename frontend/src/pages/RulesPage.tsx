@@ -172,6 +172,12 @@ export function RulesPage() {
   const entities: Entity[] = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
   const isLoading = rulesQuery.isLoading || entitiesQuery.isLoading
 
+  const [entitySourceFilter, setEntitySourceFilter] = useState<'all' | 'home_assistant' | 'zwavejs'>('all')
+  const filteredEntities = useMemo(() => {
+    if (entitySourceFilter === 'all') return entities
+    return entities.filter((e) => e.source === entitySourceFilter)
+  }, [entities, entitySourceFilter])
+
   const [editingId, setEditingId] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [kind, setKind] = useState<RuleKind>('trigger')
@@ -191,8 +197,8 @@ export function RulesPage() {
   const [actions, setActions] = useState<ActionRow[]>([{ id: uniqueId(), type: 'alarm_trigger' }])
   const [targetEntityPickerByActionId, setTargetEntityPickerByActionId] = useState<Record<string, string>>({})
 
-  const entityIdOptions = useMemo(() => entities.map((e) => e.entityId), [entities])
-  const entityIdSet = useMemo(() => new Set(entities.map((e) => e.entityId)), [entities])
+  const entityIdOptions = useMemo(() => filteredEntities.map((e) => e.entityId), [filteredEntities])
+  const entityIdSet = useMemo(() => new Set(filteredEntities.map((e) => e.entityId)), [filteredEntities])
 
   const derivedEntityIds = useMemo(() => {
     const fromConditions = conditions.map((c) => c.entityId.trim()).filter(Boolean)
@@ -666,7 +672,7 @@ export function RulesPage() {
                 <CardDescription>Match on entity state (equals) with AND/OR and optional “for”.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
 	                  <div className="space-y-1">
 	                    <label className="text-xs text-muted-foreground">
 	                      Operator <HelpTip className="ml-1" content="All = AND. Any = OR." />
@@ -690,6 +696,16 @@ export function RulesPage() {
 	                    </label>
                     <Input value={forSecondsText} onChange={(e) => setForSecondsText(e.target.value)} placeholder="e.g., 300" />
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">
+                      Entity source <HelpTip className="ml-1" content="Filter autocomplete to Home Assistant or Z-Wave JS entities." />
+                    </label>
+                    <Select size="sm" value={entitySourceFilter} onChange={(e) => setEntitySourceFilter(getSelectValue(e, (v): v is 'all' | 'home_assistant' | 'zwavejs' => v === 'all' || v === 'home_assistant' || v === 'zwavejs', 'all'))}>
+                      <option value="all">All</option>
+                      <option value="home_assistant">Home Assistant</option>
+                      <option value="zwavejs">Z-Wave JS</option>
+                    </Select>
+                  </div>
                   <div className="text-xs text-muted-foreground flex items-end">
                     {conditions.length} condition{conditions.length === 1 ? '' : 's'}
                   </div>
@@ -703,7 +719,7 @@ export function RulesPage() {
 	                          Entity ID{' '}
 	                          <HelpTip
 	                            className="ml-1"
-	                            content="A Home Assistant entity_id like binary_sensor.front_door. Use “Sync Entities” to get autocomplete."
+	                            content="An entity_id like binary_sensor.front_door or zwavejs:... Use Sync buttons at the top to import entities."
 	                          />
 	                        </label>
 	                        <DatalistInput
@@ -1053,6 +1069,100 @@ export function RulesPage() {
                                     prev.map((row) =>
                                       row.id === a.id ? { ...row, serviceDataJson: e.target.value } : row
                                     ) as ActionRow[]
+                                  )
+                                }
+                                spellCheck={false}
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        {a.type === 'zwavejs_set_value' && (
+                          <>
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">
+                                Node ID <HelpTip className="ml-1" content="Z-Wave node ID (integer)." />
+                              </label>
+                              <Input
+                                value={a.nodeId}
+                                onChange={(e) =>
+                                  setActions((prev) =>
+                                    prev.map((row) => (row.id === a.id ? { ...row, nodeId: e.target.value } : row)) as ActionRow[]
+                                  )
+                                }
+                                placeholder="e.g., 12"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">
+                                Command Class <HelpTip className="ml-1" content="ValueID.commandClass (integer)." />
+                              </label>
+                              <Input
+                                value={a.commandClass}
+                                onChange={(e) =>
+                                  setActions((prev) =>
+                                    prev.map((row) =>
+                                      row.id === a.id ? { ...row, commandClass: e.target.value } : row
+                                    ) as ActionRow[]
+                                  )
+                                }
+                                placeholder="e.g., 49"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs text-muted-foreground">
+                                Endpoint <HelpTip className="ml-1" content="ValueID.endpoint (default 0)." />
+                              </label>
+                              <Input
+                                value={a.endpoint}
+                                onChange={(e) =>
+                                  setActions((prev) =>
+                                    prev.map((row) => (row.id === a.id ? { ...row, endpoint: e.target.value } : row)) as ActionRow[]
+                                  )
+                                }
+                                placeholder="0"
+                              />
+                            </div>
+                            <div className="md:col-span-3 grid gap-3 md:grid-cols-3">
+                              <div className="space-y-1 md:col-span-2">
+                                <label className="text-xs text-muted-foreground">
+                                  Property <HelpTip className="ml-1" content="ValueID.property (string or number)." />
+                                </label>
+                                <Input
+                                  value={a.property}
+                                  onChange={(e) =>
+                                    setActions((prev) =>
+                                      prev.map((row) => (row.id === a.id ? { ...row, property: e.target.value } : row)) as ActionRow[]
+                                    )
+                                  }
+                                  placeholder="e.g., 'targetValue' or 0"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">
+                                  Property Key (optional) <HelpTip className="ml-1" content="ValueID.propertyKey (string or number)." />
+                                </label>
+                                <Input
+                                  value={a.propertyKey}
+                                  onChange={(e) =>
+                                    setActions((prev) =>
+                                      prev.map((row) => (row.id === a.id ? { ...row, propertyKey: e.target.value } : row)) as ActionRow[]
+                                    )
+                                  }
+                                  placeholder="e.g., 1"
+                                />
+                              </div>
+                            </div>
+                            <div className="md:col-span-3 space-y-1">
+                              <label className="text-xs text-muted-foreground">
+                                Value (JSON) <HelpTip className="ml-1" content="The value to set (JSON)." />
+                              </label>
+                              <Textarea
+                                className="min-h-[96px] font-mono text-xs"
+                                value={a.valueJson}
+                                onChange={(e) =>
+                                  setActions((prev) =>
+                                    prev.map((row) => (row.id === a.id ? { ...row, valueJson: e.target.value } : row)) as ActionRow[]
                                   )
                                 }
                                 spellCheck={false}

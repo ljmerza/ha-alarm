@@ -72,6 +72,22 @@ class ZwavejsApiTests(APITestCase):
         self.assertEqual(response.data["connected"], False)
         self.assertIn("disabled during tests", (response.data.get("last_error") or "").lower())
 
+    def test_zwavejs_entities_sync_requires_enabled(self):
+        set_profile_settings(self.profile, zwavejs_connection={"enabled": False, "ws_url": ""})
+        url = reverse("zwavejs-entities-sync")
+        response = self.client.post(url, data={}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_zwavejs_set_value_requires_enabled(self):
+        set_profile_settings(self.profile, zwavejs_connection={"enabled": False, "ws_url": ""})
+        url = reverse("zwavejs-set-value")
+        response = self.client.post(
+            url,
+            data={"node_id": 1, "command_class": 49, "endpoint": 0, "property": "targetValue", "value": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
 
 class ZwavejsApiPermissionsTests(APITestCase):
     def setUp(self):
@@ -87,4 +103,18 @@ class ZwavejsApiPermissionsTests(APITestCase):
     def test_non_admin_cannot_test_zwavejs_connection(self):
         url = reverse("zwavejs-test")
         response = self.client.post(url, data={"ws_url": "ws://zwavejs.local:3000"}, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_admin_cannot_sync_zwavejs_entities(self):
+        url = reverse("zwavejs-entities-sync")
+        response = self.client.post(url, data={}, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_admin_cannot_set_zwavejs_value(self):
+        url = reverse("zwavejs-set-value")
+        response = self.client.post(
+            url,
+            data={"node_id": 1, "command_class": 49, "endpoint": 0, "property": "targetValue", "value": True},
+            format="json",
+        )
         self.assertEqual(response.status_code, 403)
