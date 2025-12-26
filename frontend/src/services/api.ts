@@ -111,13 +111,9 @@ class ApiClient {
     }
 
     const doFetch = async (): Promise<Response> => {
-      const csrfHeader =
-        method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE'
-          ? { 'X-CSRFToken': (await this.getCsrfToken()) || '' }
-          : {}
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        ...csrfHeader,
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+        headers['X-CSRFToken'] = (await this.getCsrfToken()) || ''
       }
       return fetch(buildUrl().toString(), {
         method,

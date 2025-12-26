@@ -1,25 +1,10 @@
 import { Link, useLocation } from 'react-router-dom'
-import {
-  Shield,
-  Gavel,
-  Key,
-  Clock,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react'
+import { Shield, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLayoutStore } from '@/stores/layoutStore'
 import { cn } from '@/lib/utils'
 import { Routes } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
-
-const navItems = [
-  { path: Routes.HOME, label: 'Dashboard', icon: Shield },
-  { path: Routes.RULES, label: 'Rules', icon: Gavel },
-  { path: Routes.CODES, label: 'Codes', icon: Key },
-  { path: Routes.EVENTS, label: 'Events', icon: Clock },
-  { path: Routes.SETTINGS, label: 'Settings', icon: Settings },
-]
+import { navItems } from './navItems'
 
 export function Sidebar() {
   const location = useLocation()

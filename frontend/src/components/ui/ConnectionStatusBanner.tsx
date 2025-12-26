@@ -27,8 +27,10 @@ export function ConnectionStatusBanner() {
   // Show success briefly when reconnected
   useEffect(() => {
     if (wsStatus === 'connected' && isReconnecting) {
-      setIsReconnecting(false)
-      setShowSuccess(true)
+      queueMicrotask(() => {
+        setIsReconnecting(false)
+        setShowSuccess(true)
+      })
       const timer = setTimeout(() => setShowSuccess(false), 2000)
       return () => clearTimeout(timer)
     }
@@ -51,7 +53,7 @@ export function ConnectionStatusBanner() {
   }
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
+    <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 lg:bottom-4">
       {/* Success message */}
       {showSuccess && (
         <div className="flex items-center gap-2 rounded-full bg-green-600 px-4 py-2 text-white shadow-lg animate-in fade-in slide-in-from-bottom-2">

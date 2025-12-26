@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PageHeader } from '@/components/ui/page-header'
+import { Page } from '@/components/layout'
 import { SectionCard } from '@/components/ui/section-card'
 import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
@@ -89,15 +89,12 @@ export function SettingsPage() {
   const [draft, setDraft] = useState<SettingsDraft | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [hasInitialized, setHasInitialized] = useState(false)
   const [haNotifyServicePicker, setHaNotifyServicePicker] = useState('')
 
   useEffect(() => {
-    if (hasInitialized) return
     if (!initialDraft) return
-    setDraft(initialDraft)
-    setHasInitialized(true)
-  }, [hasInitialized, initialDraft])
+    queueMicrotask(() => setDraft((prev) => prev ?? initialDraft))
+  }, [initialDraft])
 
   const reset = () => {
     if (!initialDraft) return
@@ -163,22 +160,8 @@ export function SettingsPage() {
 
   const loadError = getErrorMessage(settingsQuery.error) || null
 
-  // DEBUG: Log the error object to understand its structure
-  if (settingsQuery.error) {
-    console.error('[SettingsPage] Query error detected:', {
-      error: settingsQuery.error,
-      errorType: typeof settingsQuery.error,
-      errorConstructor: settingsQuery.error?.constructor?.name,
-      errorKeys: Object.keys(settingsQuery.error),
-      errorMessage: (settingsQuery.error as any)?.message,
-      errorStringified: JSON.stringify(settingsQuery.error, null, 2),
-      extractedMessage: loadError,
-    })
-  }
-
   return (
-    <div className="space-y-6">
-      <PageHeader title="Settings" />
+    <Page title="Settings">
 
       {!isAdmin ? (
         <Alert>
@@ -561,7 +544,7 @@ export function SettingsPage() {
           </SectionCard>
         </div>
       )}
-    </div>
+    </Page>
   )
 }
 

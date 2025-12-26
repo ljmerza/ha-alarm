@@ -41,7 +41,6 @@ export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
     let raf = 0
     const offsetPx = 8
     const viewportPaddingPx = 8
-    setPositioned(false)
 
     const update = () => {
       const triggerEl = triggerRef.current
@@ -120,14 +119,19 @@ export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
     }
   }, [open, side])
 
+  const openTooltip = () => {
+    setPositioned(false)
+    setOpen(true)
+  }
+
   return (
     <span className="inline-flex">
       <span
         ref={triggerRef}
         aria-describedby={open ? tooltipId : undefined}
-        onMouseEnter={() => setOpen(true)}
+        onMouseEnter={openTooltip}
         onMouseLeave={() => setOpen(false)}
-        onFocus={() => setOpen(true)}
+        onFocus={openTooltip}
         onBlur={() => setOpen(false)}
       >
         {children}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { Activity, AlertTriangle, Key, Shield, ShieldAlert, ShieldOff } from 'lucide-react'
-import { PageHeader } from '@/components/ui/page-header'
+import { Page } from '@/components/layout'
 import { SectionCard } from '@/components/ui/section-card'
 import { Select } from '@/components/ui/select'
 import { DateTimeRangePicker } from '@/components/ui/date-time-range-picker'
@@ -41,18 +41,42 @@ const eventConfig: Record<
   string,
   {
     icon: React.ElementType
-    color: string
+    colorClassName: string
     label: string
   }
 > = {
-  [EventType.ARMED]: { icon: Shield, color: 'text-red-500', label: 'Armed' },
-  [EventType.DISARMED]: { icon: ShieldOff, color: 'text-green-500', label: 'Disarmed' },
-  [EventType.TRIGGERED]: { icon: ShieldAlert, color: 'text-red-600', label: 'Triggered' },
-  [EventType.CODE_USED]: { icon: Key, color: 'text-blue-500', label: 'Code used' },
-  [EventType.SENSOR_TRIGGERED]: { icon: Activity, color: 'text-orange-500', label: 'Sensor triggered' },
-  [EventType.FAILED_CODE]: { icon: AlertTriangle, color: 'text-amber-500', label: 'Failed code' },
-  [EventType.PENDING]: { icon: AlertTriangle, color: 'text-orange-500', label: 'Entry delay' },
-  [EventType.STATE_CHANGED]: { icon: Shield, color: 'text-muted-foreground', label: 'State changed' },
+  [EventType.ARMED]: {
+    icon: Shield,
+    colorClassName: 'text-[color:var(--color-alarm-armed-away)]',
+    label: 'Armed',
+  },
+  [EventType.DISARMED]: {
+    icon: ShieldOff,
+    colorClassName: 'text-[color:var(--color-alarm-disarmed)]',
+    label: 'Disarmed',
+  },
+  [EventType.TRIGGERED]: {
+    icon: ShieldAlert,
+    colorClassName: 'text-[color:var(--color-alarm-triggered)]',
+    label: 'Triggered',
+  },
+  [EventType.CODE_USED]: { icon: Key, colorClassName: 'text-primary', label: 'Code used' },
+  [EventType.SENSOR_TRIGGERED]: {
+    icon: Activity,
+    colorClassName: 'text-[color:var(--color-alarm-pending)]',
+    label: 'Sensor triggered',
+  },
+  [EventType.FAILED_CODE]: {
+    icon: AlertTriangle,
+    colorClassName: 'text-[color:var(--color-alarm-armed-home)]',
+    label: 'Failed code',
+  },
+  [EventType.PENDING]: {
+    icon: AlertTriangle,
+    colorClassName: 'text-[color:var(--color-alarm-pending)]',
+    label: 'Entry delay',
+  },
+  [EventType.STATE_CHANGED]: { icon: Shield, colorClassName: 'text-muted-foreground', label: 'State changed' },
 }
 
 function formatEventTimeRelative(timestamp: string): string {
@@ -79,7 +103,11 @@ function getMetadataSummary(metadata: Record<string, unknown>): string | null {
 }
 
 function EventRow({ event }: { event: AlarmEvent }) {
-  const config = eventConfig[event.eventType] || { icon: Activity, color: 'text-muted-foreground', label: event.eventType }
+  const config = eventConfig[event.eventType] || {
+    icon: Activity,
+    colorClassName: 'text-muted-foreground',
+    label: event.eventType,
+  }
   const Icon = config.icon
 
   const metaSummary = getMetadataSummary(event.metadata)
@@ -92,7 +120,7 @@ function EventRow({ event }: { event: AlarmEvent }) {
 
   return (
     <div className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-      <div className={cn('shrink-0 mt-0.5', config.color)}>
+      <div className={cn('shrink-0 mt-0.5', config.colorClassName)}>
         <Icon className="h-5 w-5" />
       </div>
       <div className="flex-1 min-w-0">
@@ -145,9 +173,7 @@ export function EventsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Events" />
-
+    <Page title="Events">
       <SectionCard
         title="Filters"
         description="Narrow down event history by type and time window."
@@ -181,14 +207,14 @@ export function EventsPage() {
         description={total ? `${total} total` : 'Most recent events first.'}
       >
         {error ? (
-          <Alert variant="destructive">
+          <Alert variant="error">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
 
         {isLoading ? (
           <div className="py-6">
-            <LoadingInline message="Loading events…" />
+            <LoadingInline label="Loading events…" />
           </div>
         ) : events.length === 0 ? (
           <EmptyState title="No events" description="Try widening the time window or clearing filters." />
@@ -213,7 +239,7 @@ export function EventsPage() {
           </div>
         ) : null}
       </SectionCard>
-    </div>
+    </Page>
   )
 }
 

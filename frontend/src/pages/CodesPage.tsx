@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateTimeRangePicker } from '@/components/ui/date-time-range-picker'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { PageHeader } from '@/components/ui/page-header'
+import { Page } from '@/components/layout'
 import { HelpTip } from '@/components/ui/help-tip'
 import { Select } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -294,8 +294,7 @@ function CodesPageContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Codes" />
+    <Page title="Codes">
 
       {isAdmin && (
         <SectionCard title="Manage User Codes" contentClassName="space-y-4">
@@ -773,7 +772,7 @@ function CodesPageContent() {
             </div>
           ))}
       </SectionCard>
-    </div>
+    </Page>
   )
 }
 

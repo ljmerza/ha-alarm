@@ -1,3 +1,5 @@
+import type { RuleDefinition } from './ruleDefinition'
+
 export type RuleKind = 'trigger' | 'disarm' | 'arm' | 'suppress' | 'escalate'
 
 export interface Entity {
@@ -22,7 +24,7 @@ export interface Rule {
   enabled: boolean
   priority: number
   schemaVersion: number
-  definition: Record<string, unknown>
+  definition: RuleDefinition
   cooldownSeconds: number | null
   entityIds: string[]
   createdBy: string | null

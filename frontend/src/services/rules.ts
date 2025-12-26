@@ -1,5 +1,5 @@
 import api from './api'
-import type { Rule, RuleRunResult, RuleSimulateRequest, RuleSimulateResult } from '@/types'
+import type { Rule, RuleRunResult, RuleSimulateRequest, RuleSimulateResult, RuleDefinition } from '@/types'
 
 export const rulesService = {
   async list(params?: { kind?: Rule['kind']; enabled?: boolean }): Promise<Rule[]> {
@@ -20,7 +20,7 @@ export const rulesService = {
     enabled: boolean
     priority: number
     schemaVersion: number
-    definition: Record<string, unknown>
+    definition: RuleDefinition
     cooldownSeconds?: number | null
     entityIds?: string[]
   }): Promise<Rule> {

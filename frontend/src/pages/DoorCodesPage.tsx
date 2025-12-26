@@ -20,7 +20,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { HelpTip } from '@/components/ui/help-tip'
 import { Input } from '@/components/ui/input'
 import { LoadingInline } from '@/components/ui/loading-inline'
-import { PageHeader } from '@/components/ui/page-header'
+import { Page } from '@/components/layout'
 import { SectionCard } from '@/components/ui/section-card'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -278,11 +278,14 @@ export function DoorCodesPage() {
       setCreateError('Time window end must be after start.')
       return
     }
-    const maxUses =
-      createMaxUses.trim() === '' ? null : Number.isFinite(Number(createMaxUses)) ? Number(createMaxUses) : NaN
-    if (createMaxUses.trim() !== '' && (!Number.isInteger(maxUses) || maxUses < 1)) {
-      setCreateError('Max uses must be a whole number ≥ 1.')
-      return
+    let maxUses: number | null = null
+    if (createMaxUses.trim() !== '') {
+      const parsed = Number(createMaxUses)
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        setCreateError('Max uses must be a whole number ≥ 1.')
+        return
+      }
+      maxUses = parsed
     }
 
     try {
@@ -358,11 +361,14 @@ export function DoorCodesPage() {
       setEditError('Time window end must be after start.')
       return
     }
-    const maxUses =
-      editMaxUses.trim() === '' ? null : Number.isFinite(Number(editMaxUses)) ? Number(editMaxUses) : NaN
-    if (editMaxUses.trim() !== '' && (!Number.isInteger(maxUses) || maxUses < 1)) {
-      setEditError('Max uses must be a whole number ≥ 1.')
-      return
+    let maxUses: number | null = null
+    if (editMaxUses.trim() !== '') {
+      const parsed = Number(editMaxUses)
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        setEditError('Max uses must be a whole number ≥ 1.')
+        return
+      }
+      maxUses = parsed
     }
 
     const req: UpdateDoorCodeRequest = {
@@ -420,8 +426,7 @@ export function DoorCodesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Door Codes" />
+    <Page title="Door Codes">
 
       {isAdmin && (
         <SectionCard title="Target User">
@@ -986,7 +991,7 @@ export function DoorCodesPage() {
           </div>
         ))}
       </SectionCard>
-    </div>
+    </Page>
   )
 }
 

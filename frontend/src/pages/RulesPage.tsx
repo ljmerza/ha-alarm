@@ -9,7 +9,7 @@ import { queryKeys } from '@/types'
 import { Link } from 'react-router-dom'
 import { Routes } from '@/lib/constants'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { PageHeader } from '@/components/ui/page-header'
+import { Page } from '@/components/layout'
 import { HelpTip } from '@/components/ui/help-tip'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -390,39 +390,38 @@ export function RulesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Rules"
-        description="Create trigger/disarm/arm rules (builder MVP)."
-        actions={
-          <>
-            <Tooltip content="Imports/updates the local Entity Registry from Home Assistant, so entity IDs autocomplete and can be referenced in rules.">
-              <Button type="button" variant="outline" onClick={syncEntities} disabled={isSaving}>
-                Sync Entities
-              </Button>
-            </Tooltip>
-            <Tooltip content="Runs enabled rules immediately using the server-side engine (useful for testing).">
-              <Button type="button" variant="outline" onClick={runRulesNow} disabled={isSaving}>
-                Run Rules
-              </Button>
-            </Tooltip>
-            <Button asChild type="button" variant="outline">
-              <Link to={Routes.RULES_TEST}>Test Rules</Link>
+    <Page
+      title="Rules"
+      description="Create trigger/disarm/arm rules (builder MVP)."
+      actions={
+        <>
+          <Tooltip content="Imports/updates the local Entity Registry from Home Assistant, so entity IDs autocomplete and can be referenced in rules.">
+            <Button type="button" variant="outline" onClick={syncEntities} disabled={isSaving}>
+              Sync Entities
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                void queryClient.invalidateQueries({ queryKey: queryKeys.rules.all })
-                void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
-              }}
-              disabled={isSaving}
-            >
-              Refresh
+          </Tooltip>
+          <Tooltip content="Runs enabled rules immediately using the server-side engine (useful for testing).">
+            <Button type="button" variant="outline" onClick={runRulesNow} disabled={isSaving}>
+              Run Rules
             </Button>
-          </>
-        }
-      />
+          </Tooltip>
+          <Button asChild type="button" variant="outline">
+            <Link to={Routes.RULES_TEST}>Test Rules</Link>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void queryClient.invalidateQueries({ queryKey: queryKeys.rules.all })
+              void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+            }}
+            disabled={isSaving}
+          >
+            Refresh
+          </Button>
+        </>
+      }
+    >
 
       {notice && (
         <Alert variant="info" layout="banner">
@@ -1064,7 +1063,7 @@ export function RulesPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </Page>
   )
 }
 

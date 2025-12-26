@@ -1,7 +1,6 @@
-import { Menu, Bell, User, LogOut, Moon, Sun, Monitor, House } from 'lucide-react'
+import { Bell, User, LogOut, Moon, Sun, Monitor, House } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useLayoutStore } from '@/stores/layoutStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { alarmService } from '@/services'
 import { queryKeys } from '@/types'
@@ -18,7 +17,6 @@ export function Header() {
   const currentUserQuery = useCurrentUserQuery()
   const user = currentUserQuery.data ?? null
   const isAuthenticated = sessionQuery.data.isAuthenticated
-  const { toggleSidebar, isMobile } = useLayoutStore()
   const { theme, setTheme } = useThemeStore()
 
   const alarmStateQuery = useQuery({
@@ -54,13 +52,6 @@ export function Header() {
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-      {/* Mobile Menu Button */}
-      {isMobile && (
-        <IconButton onClick={toggleSidebar} aria-label="Toggle menu">
-          <Menu className="h-5 w-5" />
-        </IconButton>
-      )}
-
       {/* Home */}
       <IconButton asChild aria-label="Home">
         <Link to={Routes.HOME} aria-label="Home">

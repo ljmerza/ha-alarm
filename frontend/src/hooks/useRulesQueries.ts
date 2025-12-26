@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { entitiesService, rulesService } from '@/services'
-import type { Rule } from '@/types'
+import type { Rule, RuleDefinition } from '@/types'
 import { queryKeys } from '@/types'
 import { formatEntitiesSyncNotice, formatRulesRunNotice } from '@/lib/notices'
 
@@ -55,7 +55,7 @@ export function useSaveRuleMutation() {
         enabled: boolean
         priority: number
         schemaVersion: number
-        definition: Record<string, unknown>
+        definition: RuleDefinition
         cooldownSeconds?: number | null
         entityIds?: string[]
       }

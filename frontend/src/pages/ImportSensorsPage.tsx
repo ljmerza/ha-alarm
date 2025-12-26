@@ -12,7 +12,7 @@ import { useSensorsQuery } from '@/hooks/useAlarmQueries'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { PageHeader } from '@/components/ui/page-header'
+import { Page } from '@/components/layout'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { LoadingInline } from '@/components/ui/loading-inline'
@@ -173,23 +173,22 @@ export function ImportSensorsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Import Sensors"
-        description={
-          <>
-            Add Home Assistant <code>sensor</code> and <code>binary_sensor</code> entities to your alarm system.
-          </>
-        }
-        actions={
-          <Button asChild variant="outline">
-            <Link to={Routes.HOME}>
-              <Shield />
-              Back to Home
-            </Link>
-          </Button>
-        }
-      />
+    <Page
+      title="Import Sensors"
+      description={
+        <>
+          Add Home Assistant <code>sensor</code> and <code>binary_sensor</code> entities to your alarm system.
+        </>
+      }
+      actions={
+        <Button asChild variant="outline">
+          <Link to={Routes.HOME}>
+            <Shield />
+            Back to Home
+          </Link>
+        </Button>
+      }
+    >
 
       <SectionCard title="Search" description="Select which entities to import." contentClassName="flex flex-col gap-3">
         <div className="relative w-full md:max-w-md">
@@ -399,7 +398,7 @@ export function ImportSensorsPage() {
           )}
         </Button>
       </div>
-    </div>
+    </Page>
   )
 }
 

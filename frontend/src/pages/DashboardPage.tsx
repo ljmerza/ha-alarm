@@ -1,8 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { AlarmPanel } from '@/components/alarm'
-import { QuickLinksCard } from '@/components/dashboard/QuickLinksCard'
 import { SystemStatusCard } from '@/components/dashboard/SystemStatusCard'
-import { PageHeader } from '@/components/ui/page-header'
+import { Page } from '@/components/layout'
 import { FeatureErrorBoundary } from '@/components/providers/FeatureErrorBoundary'
 import { queryKeys } from '@/types'
 
@@ -16,9 +15,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Home" description="Arm/disarm and review recent activity." />
-
+    <Page title="Home" description="Arm/disarm and review recent activity.">
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <FeatureErrorBoundary feature="Alarm Panel" onRetry={handleAlarmRetry}>
@@ -29,12 +26,9 @@ export function DashboardPage() {
           <FeatureErrorBoundary feature="System Status" variant="inline">
             <SystemStatusCard />
           </FeatureErrorBoundary>
-          <FeatureErrorBoundary feature="Quick Links" variant="inline">
-            <QuickLinksCard />
-          </FeatureErrorBoundary>
         </div>
       </div>
-    </div>
+    </Page>
   )
 }
 

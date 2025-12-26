@@ -1,15 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Shield, Gavel, Key, Clock, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Routes } from '@/lib/constants'
-
-const navItems = [
-  { path: Routes.HOME, label: 'Dashboard', icon: Shield },
-  { path: Routes.RULES, label: 'Rules', icon: Gavel },
-  { path: Routes.CODES, label: 'Codes', icon: Key },
-  { path: Routes.EVENTS, label: 'Events', icon: Clock },
-  { path: Routes.SETTINGS, label: 'Settings', icon: Settings },
-]
+import { navItems } from './navItems'
 
 export function MobileNav() {
   const location = useLocation()

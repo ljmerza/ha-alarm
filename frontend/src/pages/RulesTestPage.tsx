@@ -10,7 +10,7 @@ import { Tooltip } from '@/components/ui/tooltip'
 import { Link } from 'react-router-dom'
 import { Routes } from '@/lib/constants'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { PageHeader } from '@/components/ui/page-header'
+import { Page } from '@/components/layout'
 import { HelpTip } from '@/components/ui/help-tip'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -308,34 +308,33 @@ export function RulesTestPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Test Rules"
-        description="Simulate entity states and see which rules would match (no actions executed)."
-        actions={
-          <>
-            <Button asChild variant="outline">
-              <Link to={Routes.RULES}>Back to Rules</Link>
+    <Page
+      title="Test Rules"
+      description="Simulate entity states and see which rules would match (no actions executed)."
+      actions={
+        <>
+          <Button asChild variant="outline">
+            <Link to={Routes.RULES}>Back to Rules</Link>
+          </Button>
+          <Tooltip content="Imports/updates the local Entity Registry from Home Assistant.">
+            <Button type="button" variant="outline" onClick={syncEntities} disabled={isLoading || isRunning}>
+              Sync Entities
             </Button>
-            <Tooltip content="Imports/updates the local Entity Registry from Home Assistant.">
-              <Button type="button" variant="outline" onClick={syncEntities} disabled={isLoading || isRunning}>
-                Sync Entities
-              </Button>
-            </Tooltip>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setError(null)
-                void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
-              }}
-              disabled={isLoading || isRunning}
-            >
-              Refresh
-            </Button>
-          </>
-        }
-      />
+          </Tooltip>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setError(null)
+              void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+            }}
+            disabled={isLoading || isRunning}
+          >
+            Refresh
+          </Button>
+        </>
+      }
+    >
 
       {displayedError && (
         <Alert variant="error" layout="banner">
@@ -852,7 +851,7 @@ export function RulesTestPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </Page>
   )
 }
 

@@ -9,7 +9,3 @@ export { useModalStore, useModal, type ModalRegistry } from './modalStore'
 
 // Notifications
 export { useNotificationStore, toast } from './notificationStore'
-
-// Legacy - deprecated
-/** @deprecated Use useLayoutStore and useThemeStore instead */
-export { useUIStore, default as uiStore } from './uiStore'

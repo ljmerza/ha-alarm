@@ -38,7 +38,7 @@ export const alarmService = {
     return api.get<AlarmSettingsProfile>('/api/alarm/settings/')
   },
 
-  async getSettingsProfiles(): Promise<AlarmSettingsProfile[]> {
+  async getSettingsProfiles(): Promise<AlarmSettingsProfileMeta[]> {
     return api.get<AlarmSettingsProfileMeta[]>('/api/alarm/settings/profiles/')
   },
 
