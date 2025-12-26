@@ -1,5 +1,7 @@
 # Rules Engine + Entity Registry Planning
 
+> Archived: implemented and/or superseded; kept for historical context.
+
 ## Intent
 Replace the current “import sensors” + zone-based configuration with a rules-first system:
 - Import = sync Home Assistant entities into a local **Entity Registry**.
@@ -262,4 +264,3 @@ Goal: keep existing behavior working while moving configuration to rules.
 ## Open Decisions (explicit)
 - **Disarm from TRIGGERED**: Allowed (as requested). Default guardrails still recommended (cooldown + auditing).
 - **Zones**: Removed. Grouping replaced by tags/filters and rule composition.
-

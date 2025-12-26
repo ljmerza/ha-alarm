@@ -1,5 +1,7 @@
 # Frontend Type Safety Improvements Plan
 
+> Archived: implemented; kept for historical context.
+
 ## Overview
 
 This document outlines the implementation plan for improving type safety across the frontend codebase. The goal is to eliminate unsafe type assertions, add runtime validation, and create proper type guards for all union types.

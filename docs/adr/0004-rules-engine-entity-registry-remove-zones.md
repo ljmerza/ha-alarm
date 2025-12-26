@@ -73,5 +73,4 @@ Operational implications:
 
 ## References
 - `docs/adr/0003-separate-entity-import-from-alarm-configuration.md`
-- `docs/RULES_ENGINE_PLANNING.md`
-
+- `docs/archived/RULES_ENGINE_PLANNING.md`

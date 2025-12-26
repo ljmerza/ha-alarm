@@ -1,11 +1,13 @@
 # Home Assistant Alarm Entity (Planning)
 
+> Archived: implemented; kept for historical context.
+
 ## Summary
 Instead of syncing an existing Home Assistant alarm entity (e.g. Alarmo/manual alarm) into this app, the onboarding flow should create/connect a **new Home Assistant `alarm_control_panel` entity** that represents *this app’s* alarm state machine.
 
 Users must be able to **rename the Home Assistant alarm entity from this app’s Settings**, and have that rename reflected in Home Assistant.
 
-Important constraint: Home Assistant entities are created by HA integrations. If we explicitly do **not** ship a Home Assistant custom integration, the practical way to “create an `alarm_control_panel` entity” from this app is **MQTT discovery** (requires HA’s MQTT integration + a broker). This plan assumes MQTT discovery; see `docs/MQTT_INTEGRATION_PLANNING.md`.
+Important constraint: Home Assistant entities are created by HA integrations. If we explicitly do **not** ship a Home Assistant custom integration, the practical way to “create an `alarm_control_panel` entity” from this app is **MQTT discovery** (requires HA’s MQTT integration + a broker). This plan assumes MQTT discovery; see `./MQTT_INTEGRATION_PLANNING.md`.
 
 ## Goals
 - Create/connect a dedicated HA `alarm_control_panel` entity for this app (**one per app instance**).

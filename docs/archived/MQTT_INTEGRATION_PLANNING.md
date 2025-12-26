@@ -1,5 +1,7 @@
 # MQTT Integration (Planning)
 
+> Archived: implemented; kept for historical context.
+
 ## Goal
 Add an MQTT integration layer that:
 - Lets onboarding/configuration collect MQTT connection details (URL/host, port, username, password, TLS).
@@ -7,7 +9,7 @@ Add an MQTT integration layer that:
 - Provides a stable API for publishing/subscribing (similar in spirit to the existing `HomeAssistantGateway` wrapper).
 - Enables Home Assistant MQTT discovery for a new `alarm_control_panel` entity owned by this app.
 
-This doc focuses on *the app-side MQTT integration boundary and lifecycle*. Home Assistant entity details are covered in `docs/HA_ALARM_SYNC_PLANNING.md`.
+This doc focuses on *the app-side MQTT integration boundary and lifecycle*. Home Assistant entity details are covered in `./HA_ALARM_SYNC_PLANNING.md`.
 
 ## Non-goals (v1)
 - Providing a general-purpose MQTT UI for arbitrary topics.

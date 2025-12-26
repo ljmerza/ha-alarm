@@ -1,5 +1,7 @@
 # MQTT Password Encryption (Planning)
 
+> Archived: implemented; kept for historical context.
+
 ## Goal
 Encrypt the stored MQTT broker password at rest, while preserving the current UX:
 - Password is never returned to the frontend (only `hasPassword`).

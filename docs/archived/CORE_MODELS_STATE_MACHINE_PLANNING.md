@@ -1,5 +1,7 @@
 # Core Models and State Machine Planning
 
+> Archived: implemented and/or superseded; kept for historical context.
+
 ## Goal
 Define the minimal, durable data model and alarm state machine needed for Phase 1.
 

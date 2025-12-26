@@ -43,7 +43,7 @@ This document outlines architectural improvements for the alarm system frontend.
 - `hooks/useQueryErrorHandler.ts` - Global query errors
 - `hooks/useMutationErrorHandler.ts` - Mutation wrapper
 
-**Detailed Plan:** [FRONTEND_ERROR_HANDLING_PLAN.md](./FRONTEND_ERROR_HANDLING_PLAN.md)
+**Detailed Plan:** [FRONTEND_ERROR_HANDLING_PLAN.md](./archived/FRONTEND_ERROR_HANDLING_PLAN.md)
 
 ---
 
@@ -73,7 +73,7 @@ This document outlines architectural improvements for the alarm system frontend.
 - `components/modals/CodeEntryModal.tsx` - Code entry
 - `components/modals/ModalProvider.tsx` - Renders all modals
 
-**Detailed Plan:** [FRONTEND_STATE_MANAGEMENT_PLAN.md](./FRONTEND_STATE_MANAGEMENT_PLAN.md)
+**Detailed Plan:** [FRONTEND_STATE_MANAGEMENT_PLAN.md](./archived/FRONTEND_STATE_MANAGEMENT_PLAN.md)
 
 ---
 
@@ -149,7 +149,7 @@ function AlarmPanel({ state, onArm, onDisarm }) {
 
 **Status:** Implemented
 
-**Detailed Plan:** [FRONTEND_TYPE_SAFETY_PLAN.md](./FRONTEND_TYPE_SAFETY_PLAN.md)
+**Detailed Plan:** [FRONTEND_TYPE_SAFETY_PLAN.md](./archived/FRONTEND_TYPE_SAFETY_PLAN.md)
 
 **Problem:**
 - API responses typed as `any` in some places

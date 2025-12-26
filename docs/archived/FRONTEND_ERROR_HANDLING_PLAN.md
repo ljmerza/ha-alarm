@@ -1,5 +1,7 @@
 # Frontend Error Handling Improvement Plan
 
+> Archived: implemented; kept for historical context.
+
 ## Current State Analysis
 
 ### What Exists

@@ -1,5 +1,7 @@
 # Setup Status & Required Settings Planning
 
+> Archived: implemented; kept for historical context.
+
 ## Goal
 Define the exact “setup requirements” that gate access to the logged-in app (Home page), and document the settings/configuration needed to make the system operational.
 

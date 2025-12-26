@@ -1,5 +1,7 @@
 # Frontend State Management Improvement Plan
 
+> Archived: implemented; kept for historical context.
+
 ## Current State Analysis
 
 ### Existing Store Structure
