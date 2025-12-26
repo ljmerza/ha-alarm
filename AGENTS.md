@@ -27,11 +27,68 @@ Use this file to get oriented quickly and to follow the established “how we bu
 - Backend: `backend/`
   - Project config: `backend/config/`
   - Accounts/auth: `backend/accounts/` (custom user model, codes, onboarding/auth endpoints)
-  - Alarm domain + API: `backend/alarm/` (state machine, entity registry, rules engine, websocket)
+  - Alarm domain + API: `backend/alarm/` (state machine, sensors + entity registry, rules engine, websocket, MQTT/HA integration)
+  - Locks + door codes: `backend/locks/` (door codes CRUD + HA lock discovery)
 - Frontend: `frontend/` (React + TS + Vite; API client uses cookies + CSRF)
 - Docs: `docs/` (active) and `docs/archived/` (completed/old)
 - ADRs: `docs/adr/` (architecture decisions; update/add when behavior changes)
 - Docker helpers: `scripts/`
+
+## Features (what exists today)
+### Backend features
+- **Auth + sessions (SPA-first)**: session cookies + CSRF (`GET /api/auth/csrf/`, `POST /api/auth/login/`, `POST /api/auth/logout/`).
+- **Onboarding + setup gating**: bootstrap (`POST /api/onboarding/`) + setup requirements (`GET /api/onboarding/setup-status/`).
+- **Alarm state machine**: snapshot (`AlarmStateSnapshot`) + event log (`AlarmEvent`) with transitions via `alarm.use_cases` / `alarm.state_machine`.
+- **Alarm API**:
+  - state + transitions: `GET /api/alarm/state/`, `POST /api/alarm/arm/`, `POST /api/alarm/disarm/`, `POST /api/alarm/cancel-arming/`
+  - events feed: `GET /api/events/`
+- **WebSocket updates**: `/ws/alarm/` via Channels consumer (`backend/alarm/consumers.py`).
+- **Sensors + entity registry**:
+  - sensors CRUD: `GET/POST /api/alarm/sensors/`, `GET/PATCH/DELETE /api/alarm/sensors/:id/`
+  - HA entity registry (import/sync): `GET /api/alarm/entities/`, `POST /api/alarm/entities/sync/`
+- **Rules engine**: rules CRUD + evaluation tools (`/api/alarm/rules/`, `/api/alarm/rules/run/`, `/api/alarm/rules/simulate/`).
+- **Home Assistant integration**: status + entity/service discovery (`/api/alarm/home-assistant/status/`, `/entities/`, `/notify-services/`) via `HomeAssistantGateway`.
+- **MQTT integration (HA discovery + commands)**:
+  - settings + status + test: `/api/alarm/mqtt/settings/`, `/api/alarm/mqtt/status/`, `/api/alarm/mqtt/test/`
+  - HA alarm entity discovery: `/api/alarm/mqtt/publish-discovery/`, `/api/alarm/mqtt/alarm-entity/`
+  - secret handling: `backend/alarm/crypto.py` (`SETTINGS_ENCRYPTION_KEY` required to decrypt stored secrets)
+- **Codes**:
+  - alarm PIN codes: `/api/codes/` (accounts `UserCode`)
+  - door codes + lock assignment: `/api/door-codes/` and `/api/locks/available/` (locks app)
+
+### Frontend features
+- **Cookie + CSRF API client**: `frontend/src/services/api.ts` (`credentials: 'include'`, auto-CSRF priming).
+- **Pages**: `frontend/src/pages/`
+  - Auth: `LoginPage.tsx`, bootstrap: `OnboardingPage.tsx`
+  - Setup: `SetupWizardPage.tsx`, MQTT: `SetupMqttPage.tsx`, entity import: `ImportSensorsPage.tsx`
+  - Operations: `DashboardPage.tsx`, `EventsPage.tsx`, `RulesPage.tsx`, `RulesTestPage.tsx`, `CodesPage.tsx`, `DoorCodesPage.tsx`, `SettingsPage.tsx`
+- **Error resilience**: feature-level error boundaries + centralized error handling (see `frontend/src/components/providers/FeatureErrorBoundary.tsx` and `frontend/src/lib/errors.ts`).
+- **Client state**: React Query for server state + focused Zustand stores (see `frontend/src/stores/`).
+
+## Fast orientation (where to look first)
+- Alarm state machine core: `backend/alarm/state_machine/` and `backend/alarm/use_cases/`
+- HTTP endpoints wiring: `backend/alarm/urls.py`, `backend/accounts/urls.py`, `backend/locks/urls.py`
+- DRF views (thin controllers): `backend/alarm/views/`, `backend/accounts/views/`, `backend/locks/views/`
+- Settings keys + defaults: `backend/alarm/settings_registry.py`
+- MQTT + HA discovery payloads: `backend/alarm/mqtt/ha_alarm.py`
+- Secret encryption helpers: `backend/alarm/crypto.py`
+- Frontend routing/pages: `frontend/src/pages/` and `frontend/src/routes.tsx`
+- Frontend API + WS clients: `frontend/src/services/api.ts`, `frontend/src/services/websocket.ts`
+
+## Common commands
+### Run a realistic demo dataset (backend container)
+```bash
+./scripts/docker-shell.sh
+python manage.py seed_test_home
+```
+
+### Targeted tests
+```bash
+./scripts/docker-shell.sh
+pytest backend/accounts/tests/test_setup_status.py
+pytest backend/alarm/tests/test_websocket.py
+pytest backend/alarm/tests/test_mqtt_api.py
+```
 
 ## Architecture (what exists today)
 ### Backend
@@ -115,6 +172,8 @@ Use this checklist to keep changes consistent and easy to test.
 - Home Assistant settings:
   - `HOME_ASSISTANT_URL` / `HOME_ASSISTANT_TOKEN` (preferred)
   - `HA_URL` / `HA_TOKEN` (compat)
+- Secrets at rest:
+  - `SETTINGS_ENCRYPTION_KEY` (required to decrypt stored secrets like encrypted MQTT passwords)
 - Dev CSRF/CORS:
   - `DEBUG=True` and `ALLOWED_HOSTS` control dev-time trusted origins; see `backend/config/settings.py`.
 
