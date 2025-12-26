@@ -435,13 +435,11 @@ function CodesPageContent() {
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium" htmlFor="create-window-start">
-                          Time window start (optional)
-                        </label>
-                        <HelpTip content="If set (with an end time), the code is only valid during this daily time window in the user's local timezone." />
-                      </div>
+                    <FormField
+                      label="Time window start (optional)"
+                      htmlFor="create-window-start"
+                      help="If set (with an end time), the code is only valid during this daily time window in the user's local timezone."
+                    >
                       <Input
                         id="create-window-start"
                         type="time"
@@ -449,14 +447,12 @@ function CodesPageContent() {
                         onChange={(e) => setCreateWindowStart(e.target.value)}
                         disabled={createMutation.isPending}
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium" htmlFor="create-window-end">
-                          Time window end (optional)
-                        </label>
-                        <HelpTip content="End must be after start (same-day window). Leave both blank for no daily time restriction." />
-                      </div>
+                    </FormField>
+                    <FormField
+                      label="Time window end (optional)"
+                      htmlFor="create-window-end"
+                      help="End must be after start (same-day window). Leave both blank for no daily time restriction."
+                    >
                       <Input
                         id="create-window-end"
                         type="time"
@@ -464,7 +460,7 @@ function CodesPageContent() {
                         onChange={(e) => setCreateWindowEnd(e.target.value)}
                         disabled={createMutation.isPending}
                       />
-                    </div>
+                    </FormField>
                   </div>
                 </div>
               )}

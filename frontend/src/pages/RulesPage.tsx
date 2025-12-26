@@ -17,6 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { Pill } from '@/components/ui/pill'
 import { DatalistInput } from '@/components/ui/datalist-input'
+import { FormField } from '@/components/ui/form-field'
 import { EmptyState } from '@/components/ui/empty-state'
 import { IconButton } from '@/components/ui/icon-button'
 import { useEntitiesQuery, useRulesQuery, useSyncEntitiesMutation, useRunRulesMutation, useSaveRuleMutation, useDeleteRuleMutation } from '@/hooks/useRulesQueries'
@@ -446,52 +447,54 @@ export function RulesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-	          <div className="grid gap-3 md:grid-cols-2">
-	            <div className="space-y-1">
-	              <label className="text-xs text-muted-foreground">
-	                Name <HelpTip className="ml-1" content="A human-friendly label for the rule." />
-	              </label>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField
+              size="compact"
+              label="Name"
+              htmlFor="rule-name"
+              help="A human-friendly label for the rule."
+            >
               <Input
+                id="rule-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Disarm if presence for 5m"
               />
-            </div>
+            </FormField>
 
-            <div className="grid gap-3 grid-cols-2">
-              <div className="space-y-1">
-	                <label className="text-xs text-muted-foreground">
-	                  Kind{' '}
-	                  <HelpTip
-	                    className="ml-1"
-	                    content="What category the rule belongs to (trigger/disarm/arm/etc.). This is used for filtering and later conflict policy."
-	                  />
-	                </label>
-	                <Select
-	                  size="sm"
-	                  value={kind}
-	                  onChange={(e) => setKind(e.target.value as RuleKind)}
-	                >
-	                  {ruleKinds.map((k) => (
-	                    <option key={k.value} value={k.value}>
-	                      {k.label}
-	                    </option>
-	                  ))}
-	                </Select>
-	              </div>
-	              <div className="space-y-1">
-	                <label className="text-xs text-muted-foreground">
-	                  Priority{' '}
-	                  <HelpTip
-	                    className="ml-1"
-	                    content="Higher priority rules are evaluated first (and may win if multiple rules match)."
-	                  />
-	                </label>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                size="compact"
+                label="Kind"
+                htmlFor="rule-kind"
+                help="What category the rule belongs to (trigger/disarm/arm/etc.). This is used for filtering and later conflict policy."
+              >
+                <Select
+                  id="rule-kind"
+                  size="sm"
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as RuleKind)}
+                >
+                  {ruleKinds.map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+
+              <FormField
+                size="compact"
+                label="Priority"
+                htmlFor="rule-priority"
+                help="Higher priority rules are evaluated first (and may win if multiple rules match)."
+              >
                 <Input
+                  id="rule-priority"
                   value={String(priority)}
                   onChange={(e) => setPriority(Number.parseInt(e.target.value || '0', 10) || 0)}
                 />
-              </div>
+              </FormField>
             </div>
           </div>
 
@@ -528,37 +531,40 @@ export function RulesPage() {
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1">
-	              <label className="text-xs text-muted-foreground">
-	                Cooldown seconds (optional){' '}
-	                <HelpTip
-	                  className="ml-1"
-	                  content="Minimum time between fires for this rule (helps prevent spam/flapping)."
-	                />
-	              </label>
-              <Input value={cooldownSeconds} onChange={(e) => setCooldownSeconds(e.target.value)} placeholder="e.g., 60" />
-            </div>
-            <div className="space-y-1">
-	              <label className="text-xs text-muted-foreground">
-	                Referenced entity IDs{' '}
-	                <HelpTip
-	                  className="ml-1"
-	                  content="Used to quickly find which rules should re-evaluate when an entity changes. In Builder mode this is derived from your conditions; in Advanced mode you can edit it."
-	                />
-	              </label>
+            <FormField
+              size="compact"
+              label="Cooldown seconds (optional)"
+              htmlFor="rule-cooldown-seconds"
+              help="Minimum time between fires for this rule (helps prevent spam/flapping)."
+            >
+              <Input
+                id="rule-cooldown-seconds"
+                value={cooldownSeconds}
+                onChange={(e) => setCooldownSeconds(e.target.value)}
+                placeholder="e.g., 60"
+              />
+            </FormField>
+
+            <FormField
+              size="compact"
+              label="Referenced entity IDs"
+              htmlFor="rule-entity-ids"
+              help="Used to quickly find which rules should re-evaluate when an entity changes. In Builder mode this is derived from your conditions; in Advanced mode you can edit it."
+              description={
+                !advanced
+                  ? `Auto-derived from conditions: ${derivedEntityIds.length ? derivedEntityIds.join(', ') : '—'}`
+                  : `Known entities: ${entities.length}.`
+              }
+            >
               <Textarea
+                id="rule-entity-ids"
                 className="min-h-[88px]"
                 value={advanced ? entityIdsText : derivedEntityIdsText}
                 onChange={(e) => setEntityIdsText(e.target.value)}
                 placeholder="One per line (or comma-separated)"
                 disabled={!advanced}
               />
-              <div className="text-xs text-muted-foreground">
-                {!advanced
-                  ? `Auto-derived from conditions: ${derivedEntityIds.length ? derivedEntityIds.join(', ') : '—'}`
-                  : `Known entities: ${entities.length}.`}
-              </div>
-            </div>
+            </FormField>
           </div>
 
           {!advanced && (

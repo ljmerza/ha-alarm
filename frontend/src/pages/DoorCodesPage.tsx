@@ -24,6 +24,7 @@ import { Page } from '@/components/layout'
 import { SectionCard } from '@/components/ui/section-card'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { FormField } from '@/components/ui/form-field'
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
@@ -439,22 +440,21 @@ export function DoorCodesPage() {
             </Alert>
           )}
           {!usersQuery.isLoading && !usersQuery.isError && (
-            <div className="max-w-md space-y-2">
-              <label className="text-sm font-medium" htmlFor="door-codes-user-select">
-                User
-              </label>
-              <Select
-                id="door-codes-user-select"
-                value={selectedUserIdOrDefault}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-              >
-                <option value="">Select a user…</option>
-                {usersForSelect.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.displayName || u.email}
-                  </option>
-                ))}
-              </Select>
+            <div className="max-w-md">
+              <FormField label="User" htmlFor="door-codes-user-select">
+                <Select
+                  id="door-codes-user-select"
+                  value={selectedUserIdOrDefault}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                >
+                  <option value="">Select a user…</option>
+                  {usersForSelect.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.displayName || u.email}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
             </div>
           )}
         </SectionCard>
@@ -463,10 +463,7 @@ export function DoorCodesPage() {
       {canManage && (
         <SectionCard title="Create Door Code" contentClassName="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="door-code-create-type">
-                Code type
-              </label>
+            <FormField label="Code type" htmlFor="door-code-create-type">
               <Select
                 id="door-code-create-type"
                 value={createCodeType}
@@ -476,45 +473,40 @@ export function DoorCodesPage() {
                 <option value="permanent">Permanent</option>
                 <option value="temporary">Temporary</option>
               </Select>
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="door-code-create-label">
-                Label (optional)
-              </label>
+            <FormField label="Label (optional)" htmlFor="door-code-create-label">
               <Input
                 id="door-code-create-label"
                 value={createLabel}
                 onChange={(e) => setCreateLabel(e.target.value)}
                 disabled={createMutation.isPending}
               />
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium" htmlFor="door-code-create-code">
-                  Code (PIN)
-                </label>
-                <HelpTip content="Codes are stored hashed on the server. Enter a 4–8 digit PIN; you cannot view it later." />
-              </div>
+            <FormField
+              label="Code (4–8 digits)"
+              htmlFor="door-code-create-code"
+              help="Codes are stored hashed on the server. Enter a 4–8 digit PIN; you cannot view it later."
+              description="Codes are never shown again after creation."
+              required
+            >
               <Input
                 id="door-code-create-code"
                 value={createCode}
                 onChange={(e) => setCreateCode(e.target.value)}
-                placeholder="4–8 digits"
+                placeholder="••••"
                 inputMode="numeric"
-                autoComplete="off"
+                autoComplete="one-time-code"
                 disabled={createMutation.isPending}
               />
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium" htmlFor="door-code-create-max-uses">
-                  Max uses (optional)
-                </label>
-                <HelpTip content="Leave blank for unlimited uses." />
-              </div>
+            <FormField
+              label="Max uses (optional)"
+              htmlFor="door-code-create-max-uses"
+              help="Leave blank for unlimited uses."
+            >
               <Input
                 id="door-code-create-max-uses"
                 type="number"
@@ -524,16 +516,12 @@ export function DoorCodesPage() {
                 onChange={(e) => setCreateMaxUses(e.target.value)}
                 disabled={createMutation.isPending}
               />
-            </div>
+            </FormField>
           </div>
 
           {createCodeType === 'temporary' && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="text-sm font-medium">Active date range (optional)</div>
-                  <HelpTip content="If set, the code is only valid between these timestamps." />
-                </div>
+              <div>
                 <DateTimeRangePicker
                   label="Active window (optional)"
                   value={{ start: createStartAtLocal, end: createEndAtLocal }}
@@ -543,6 +531,10 @@ export function DoorCodesPage() {
                   }}
                   disabled={createMutation.isPending}
                 />
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <HelpTip content="If set, the code only works between these timestamps (in the user's local timezone). Leave blank for no overall date range." />
+                  <span>Optional overall validity window.</span>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -571,10 +563,11 @@ export function DoorCodesPage() {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="door-code-create-window-start">
-                    Time window start (optional)
-                  </label>
+                <FormField
+                  label="Time window start (optional)"
+                  htmlFor="door-code-create-window-start"
+                  help="Leave both start and end blank for no daily time restriction."
+                >
                   <Input
                     id="door-code-create-window-start"
                     type="time"
@@ -582,11 +575,12 @@ export function DoorCodesPage() {
                     onChange={(e) => setCreateWindowStart(e.target.value)}
                     disabled={createMutation.isPending}
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="door-code-create-window-end">
-                    Time window end (optional)
-                  </label>
+                </FormField>
+                <FormField
+                  label="Time window end (optional)"
+                  htmlFor="door-code-create-window-end"
+                  help="End must be after start (same-day window). Leave both blank for no daily time restriction."
+                >
                   <Input
                     id="door-code-create-window-end"
                     type="time"
@@ -594,16 +588,15 @@ export function DoorCodesPage() {
                     onChange={(e) => setCreateWindowEnd(e.target.value)}
                     disabled={createMutation.isPending}
                   />
-                </div>
+                </FormField>
               </div>
             </div>
           )}
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-medium">Locks</div>
-              <HelpTip content="Select which locks this code applies to. This list comes from the synced entity registry (same as Rules)." />
-            </div>
+          <FormField
+            label="Locks"
+            help="Select which locks this code applies to. This list comes from the synced entity registry (same as Rules)."
+          >
 
             {entitiesQuery.isLoading && <LoadingInline label="Loading locks…" />}
             {entitiesQuery.isError && (
@@ -667,15 +660,14 @@ export function DoorCodesPage() {
                 disabled={createMutation.isPending}
               />
             )}
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium" htmlFor="door-code-create-password">
-                Re-authenticate (password)
-              </label>
-              <HelpTip content="Required to create a door code." />
-            </div>
+          <FormField
+            label="Re-authenticate (password)"
+            htmlFor="door-code-create-password"
+            help="Required to create a door code."
+            required
+          >
             <Input
               id="door-code-create-password"
               type="password"
@@ -684,7 +676,7 @@ export function DoorCodesPage() {
               placeholder="Your account password"
               disabled={createMutation.isPending}
             />
-          </div>
+          </FormField>
 
           {createError && (
             <Alert variant="error" layout="inline">

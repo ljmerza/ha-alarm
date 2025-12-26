@@ -10,6 +10,7 @@ export interface FormFieldProps extends React.HTMLAttributes<HTMLDivElement> {
   help?: string
   error?: React.ReactNode
   required?: boolean
+  size?: 'default' | 'compact'
 }
 
 export function FormField({
@@ -19,6 +20,7 @@ export function FormField({
   help,
   error,
   required,
+  size = 'default',
   className,
   children,
   ...props
@@ -35,12 +37,17 @@ export function FormField({
     .filter(Boolean)
     .join(' ')
 
+  const containerSpacing = size === 'compact' ? 'space-y-1' : 'space-y-2'
+  const labelClassName = size === 'compact' ? 'text-xs text-muted-foreground' : 'text-sm font-medium'
+  const descriptionClassName = size === 'compact' ? 'text-xs text-muted-foreground' : 'text-sm text-muted-foreground'
+  const errorClassName = size === 'compact' ? 'text-xs text-destructive' : 'text-sm text-destructive'
+
   return (
-    <div className={cn('space-y-2', className)} {...props}>
+    <div className={cn(containerSpacing, className)} {...props}>
       {label ? (
         <div className="flex items-center gap-2">
           <label
-            className="text-sm font-medium"
+            className={labelClassName}
             htmlFor={htmlFor}
             aria-describedby={describedBy || undefined}
           >
@@ -54,7 +61,7 @@ export function FormField({
       <div>{children}</div>
 
       {description ? (
-        <div id={descriptionId} className="text-sm text-muted-foreground">
+        <div id={descriptionId} className={descriptionClassName}>
           {description}
         </div>
       ) : null}
@@ -64,11 +71,10 @@ export function FormField({
         </div>
       ) : null}
       {error ? (
-        <div id={errorId} className="text-sm text-destructive">
+        <div id={errorId} className={errorClassName}>
           {error}
         </div>
       ) : null}
     </div>
   )
 }
-
