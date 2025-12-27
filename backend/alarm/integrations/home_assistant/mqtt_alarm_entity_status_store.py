@@ -4,12 +4,12 @@ from datetime import datetime
 
 from django.utils import timezone
 
-from alarm.models import AlarmSettingsProfile, MqttIntegrationStatus
+from alarm.models import AlarmSettingsProfile, HomeAssistantMqttAlarmEntityStatus
 from alarm.use_cases.settings_profile import ensure_active_settings_profile
 
 
-def _get_or_create_status(profile: AlarmSettingsProfile) -> MqttIntegrationStatus:
-    status, _ = MqttIntegrationStatus.objects.get_or_create(profile=profile)
+def _get_or_create_status(profile: AlarmSettingsProfile) -> HomeAssistantMqttAlarmEntityStatus:
+    status, _ = HomeAssistantMqttAlarmEntityStatus.objects.get_or_create(profile=profile)
     return status
 
 
@@ -44,7 +44,7 @@ def mark_error(*, error: str, when: datetime | None = None) -> None:
 
 def read_status() -> dict[str, object]:
     profile = ensure_active_settings_profile()
-    status = MqttIntegrationStatus.objects.filter(profile=profile).first()
+    status = HomeAssistantMqttAlarmEntityStatus.objects.filter(profile=profile).first()
     if not status:
         return {
             "last_discovery_publish_at": None,

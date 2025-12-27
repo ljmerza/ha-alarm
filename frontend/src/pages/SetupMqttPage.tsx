@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form'
 import { Routes, UserRole } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/errors'
 import { useAuth } from '@/hooks/useAuth'
-import { useMqttAlarmEntityQuery, useMqttSettingsQuery, useMqttStatusQuery, usePublishMqttDiscoveryMutation, useTestMqttConnectionMutation, useUpdateMqttAlarmEntityMutation, useUpdateMqttSettingsMutation } from '@/hooks/useMqtt'
+import { useMqttSettingsQuery, useMqttStatusQuery, useTestMqttConnectionMutation, useUpdateMqttSettingsMutation } from '@/hooks/useMqtt'
 import { CenteredCard } from '@/components/ui/centered-card'
 import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
@@ -27,9 +27,6 @@ const schema = z.object({
   clientId: z.string().optional(),
   keepaliveSeconds: z.string().min(1, 'Keepalive is required'),
   connectTimeoutSeconds: z.string().min(1, 'Connect timeout is required'),
-  alarmEntityEnabled: z.boolean(),
-  alarmEntityName: z.string().min(1, 'Name is required'),
-  alsoRenameInHomeAssistant: z.boolean(),
 })
 
 type FormData = z.infer<typeof schema>
@@ -43,15 +40,12 @@ export function SetupMqttPage() {
 
   const statusQuery = useMqttStatusQuery()
   const settingsQuery = useMqttSettingsQuery()
-  const entityQuery = useMqttAlarmEntityQuery()
 
   const updateSettings = useUpdateMqttSettingsMutation()
-  const updateEntity = useUpdateMqttAlarmEntityMutation()
   const testConnection = useTestMqttConnectionMutation()
-  const publishDiscovery = usePublishMqttDiscoveryMutation()
 
   const initialValues = useMemo<FormData | null>(() => {
-    if (!settingsQuery.data || !entityQuery.data) return null
+    if (!settingsQuery.data) return null
     return {
       enabled: settingsQuery.data.enabled,
       host: settingsQuery.data.host || '',
@@ -63,11 +57,8 @@ export function SetupMqttPage() {
       clientId: settingsQuery.data.clientId || 'latchpoint-alarm',
       keepaliveSeconds: String(settingsQuery.data.keepaliveSeconds ?? 30),
       connectTimeoutSeconds: String(settingsQuery.data.connectTimeoutSeconds ?? 5),
-      alarmEntityEnabled: entityQuery.data.enabled,
-      alarmEntityName: entityQuery.data.entityName || 'Latchpoint',
-      alsoRenameInHomeAssistant: entityQuery.data.alsoRenameInHomeAssistant ?? true,
     }
-  }, [entityQuery.data, settingsQuery.data])
+  }, [settingsQuery.data])
 
   const {
     register,
@@ -125,11 +116,6 @@ export function SetupMqttPage() {
         keepaliveSeconds,
         connectTimeoutSeconds,
       })
-      await updateEntity.mutateAsync({
-        enabled: data.alarmEntityEnabled,
-        entityName: data.alarmEntityName.trim(),
-        alsoRenameInHomeAssistant: data.alsoRenameInHomeAssistant,
-      })
       setValue('password', '')
       setNotice('Saved MQTT settings.')
       void statusQuery.refetch()
@@ -163,29 +149,17 @@ export function SetupMqttPage() {
     }
   }
 
-  const doPublish = async () => {
-    setError(null)
-    setNotice(null)
-    try {
-      await publishDiscovery.mutateAsync()
-      setNotice('Published Home Assistant discovery config.')
-      void statusQuery.refetch()
-    } catch (err) {
-      setError(getErrorMessage(err) || 'Failed to publish discovery config')
-    }
-  }
-
   return (
     <CenteredCard
       layout="section"
-      title="Home Assistant (MQTT)"
-      description="Connect to an MQTT broker and create the Home Assistant alarm entity."
+      title="MQTT"
+      description="Connect to an MQTT broker for integrations (Home Assistant, Zigbee2MQTT, and more)."
       icon={<Wifi className="h-6 w-6" />}
     >
       {!isAdmin ? (
         <Alert variant="warning" layout="inline">
           <AlertTitle>Admin action required</AlertTitle>
-          <AlertDescription>An admin must configure MQTT integration.</AlertDescription>
+          <AlertDescription>An admin must configure MQTT.</AlertDescription>
         </Alert>
       ) : null}
 
@@ -200,18 +174,6 @@ export function SetupMqttPage() {
         </div>
         {statusQuery.data?.lastError ? (
           <div className="text-muted-foreground">Last error: {statusQuery.data.lastError}</div>
-        ) : null}
-        {statusQuery.data?.alarmEntity?.enabled ? (
-          <div className="text-muted-foreground">
-            Entity: {statusQuery.data.alarmEntity.haEntityId || '—'} •{' '}
-            {statusQuery.data.alarmEntity.lastStatePublishAt ? 'Syncing' : 'Not synced yet'}
-            {statusQuery.data.alarmEntity.lastDiscoveryPublishAt ? (
-              <span>
-                {' '}
-                • Last discovery: {new Date(statusQuery.data.alarmEntity.lastDiscoveryPublishAt).toLocaleString()}
-              </span>
-            ) : null}
-          </div>
         ) : null}
       </div>
 
@@ -301,35 +263,6 @@ export function SetupMqttPage() {
           </FormField>
         </div>
 
-        <hr className="border-border" />
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="text-sm font-medium">Create Home Assistant alarm entity</div>
-          <Switch
-            checked={watch('alarmEntityEnabled')}
-            onCheckedChange={(checked) => setValue('alarmEntityEnabled', checked)}
-            disabled={!isAdmin || isSubmitting}
-          />
-        </div>
-
-        <FormField label="Entity name" htmlFor="alarmEntityName" required error={errors.alarmEntityName?.message}>
-          <Input
-            id="alarmEntityName"
-            placeholder="Latchpoint"
-            {...register('alarmEntityName')}
-            disabled={!isAdmin || isSubmitting || !watch('alarmEntityEnabled')}
-          />
-        </FormField>
-
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={watch('alsoRenameInHomeAssistant')}
-            onChange={(e) => setValue('alsoRenameInHomeAssistant', e.target.checked)}
-            disabled={!isAdmin || isSubmitting || !watch('alarmEntityEnabled')}
-          />
-          Also rename in Home Assistant (republish discovery config)
-        </label>
-
         {error ? (
           <Alert variant="error" layout="inline">
             <AlertDescription>{error}</AlertDescription>
@@ -354,15 +287,6 @@ export function SetupMqttPage() {
             disabled={!isAdmin || isSubmitting || testConnection.isPending}
           >
             {testConnection.isPending ? 'Testing…' : 'Test Connection'}
-          </Button>
-          <Button
-            type="button"
-            className="w-full"
-            variant="secondary"
-            onClick={() => void doPublish()}
-            disabled={!isAdmin || isSubmitting || publishDiscovery.isPending}
-          >
-            {publishDiscovery.isPending ? 'Publishing…' : 'Publish Discovery'}
           </Button>
         </div>
 

@@ -103,7 +103,10 @@ export const queryKeys = {
   mqtt: {
     status: ['mqtt', 'status'] as const,
     settings: ['mqtt', 'settings'] as const,
-    alarmEntity: ['mqtt', 'alarmEntity'] as const,
+  },
+  integrations: {
+    homeAssistantMqttAlarmEntity: ['integrations', 'homeAssistant', 'mqttAlarmEntity'] as const,
+    homeAssistantMqttAlarmEntityStatus: ['integrations', 'homeAssistant', 'mqttAlarmEntity', 'status'] as const,
   },
   zwavejs: {
     status: ['zwavejs', 'status'] as const,

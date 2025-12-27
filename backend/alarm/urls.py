@@ -14,8 +14,21 @@ urlpatterns = [
     path("mqtt/status/", views.MqttStatusView.as_view(), name="mqtt-status"),
     path("mqtt/settings/", views.MqttSettingsView.as_view(), name="mqtt-settings"),
     path("mqtt/test/", views.MqttTestConnectionView.as_view(), name="mqtt-test"),
-    path("mqtt/publish-discovery/", views.MqttPublishDiscoveryView.as_view(), name="mqtt-publish-discovery"),
-    path("mqtt/alarm-entity/", views.HomeAssistantAlarmEntitySettingsView.as_view(), name="mqtt-alarm-entity"),
+    path(
+        "integrations/home-assistant/mqtt-alarm-entity/status/",
+        views.HomeAssistantMqttAlarmEntityStatusView.as_view(),
+        name="integrations-ha-mqtt-alarm-entity-status",
+    ),
+    path(
+        "integrations/home-assistant/mqtt-alarm-entity/",
+        views.HomeAssistantMqttAlarmEntitySettingsView.as_view(),
+        name="integrations-ha-mqtt-alarm-entity",
+    ),
+    path(
+        "integrations/home-assistant/mqtt-alarm-entity/publish-discovery/",
+        views.HomeAssistantMqttAlarmEntityPublishDiscoveryView.as_view(),
+        name="integrations-ha-mqtt-alarm-entity-publish-discovery",
+    ),
     path("home-assistant/status/", views.HomeAssistantStatusView.as_view(), name="ha-status"),
     path("home-assistant/entities/", views.HomeAssistantEntitiesView.as_view(), name="ha-entities"),
     path(

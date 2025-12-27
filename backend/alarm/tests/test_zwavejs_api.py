@@ -12,7 +12,7 @@ from alarm.tests.settings_test_utils import set_profile_settings
 class ZwavejsApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="zwavejs@example.com", password="pass")
-        role = Role.objects.create(slug="admin", name="Admin")
+        role, _ = Role.objects.get_or_create(slug="admin", defaults={"name": "Admin"})
         UserRoleAssignment.objects.create(user=self.user, role=role)
         self.client = APIClient()
         self.client.force_authenticate(self.user)

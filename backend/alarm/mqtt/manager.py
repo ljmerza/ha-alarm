@@ -109,8 +109,7 @@ class MqttConnectionManager:
 
     def apply_settings(self, *, settings: MqttConnectionSettings) -> None:
         with self._lock:
-            if dict(self._settings) == dict(settings):
-                return
+            same_settings = dict(self._settings) == dict(settings)
             self._settings = dict(settings)
 
         if not settings.get("enabled"):
@@ -119,6 +118,10 @@ class MqttConnectionManager:
         if not _is_configured(settings):
             self._set_error("MQTT is enabled but host/port are not configured.")
             self._disconnect()
+            return
+        # If settings are unchanged and we're already connected, avoid reconnect churn.
+        # If settings are unchanged but we're disconnected, we still retry connecting.
+        if same_settings and self.get_status().connected:
             return
         self._connect(settings=settings)
 
@@ -276,13 +279,6 @@ class MqttConnectionManager:
             if settings.get("tls_insecure"):
                 client.tls_insecure_set(True)
 
-        # Best-effort HA availability support via LWT.
-        try:
-            from alarm.mqtt.constants import AVAILABILITY_TOPIC
-
-            client.will_set(AVAILABILITY_TOPIC, payload="offline", qos=0, retain=True)
-        except Exception:
-            pass
         return client
 
     def publish(self, *, topic: str, payload: str, qos: int = 0, retain: bool = False) -> None:

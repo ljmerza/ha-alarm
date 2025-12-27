@@ -286,6 +286,7 @@ class AlarmApiTests(APITestCase):
             profile,
             delay_time=5,
             arming_time=0,
+            state_overrides={AlarmState.ARMED_AWAY: {"arming_time": 0}},
             trigger_time=5,
             code_arm_required=False,
         )

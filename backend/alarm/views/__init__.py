@@ -9,11 +9,14 @@ from .home_assistant import (
     HomeAssistantStatusView,
 )
 from .mqtt import (
-    HomeAssistantAlarmEntitySettingsView,
-    MqttPublishDiscoveryView,
     MqttSettingsView,
     MqttStatusView,
     MqttTestConnectionView,
+)
+from .integrations.home_assistant_mqtt_alarm_entity import (
+    HomeAssistantMqttAlarmEntityPublishDiscoveryView,
+    HomeAssistantMqttAlarmEntitySettingsView,
+    HomeAssistantMqttAlarmEntityStatusView,
 )
 from .zwavejs import (
     ZwavejsEntitySyncView,
@@ -53,8 +56,9 @@ __all__ = [
     "MqttSettingsView",
     "MqttStatusView",
     "MqttTestConnectionView",
-    "MqttPublishDiscoveryView",
-    "HomeAssistantAlarmEntitySettingsView",
+    "HomeAssistantMqttAlarmEntityPublishDiscoveryView",
+    "HomeAssistantMqttAlarmEntitySettingsView",
+    "HomeAssistantMqttAlarmEntityStatusView",
     "ZwavejsSettingsView",
     "ZwavejsStatusView",
     "ZwavejsTestConnectionView",

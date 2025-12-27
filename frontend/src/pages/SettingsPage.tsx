@@ -20,7 +20,13 @@ import { useAlarmSettingsQuery } from '@/hooks/useAlarmQueries'
 import { useCurrentUserQuery } from '@/hooks/useAuthQueries'
 import { useHomeAssistantNotifyServices } from '@/hooks/useHomeAssistant'
 import { useUpdateSettingsProfileMutation } from '@/hooks/useSettingsQueries'
-import { useMqttAlarmEntityQuery, useMqttSettingsQuery, useMqttStatusQuery } from '@/hooks/useMqtt'
+import { useMqttSettingsQuery, useMqttStatusQuery } from '@/hooks/useMqtt'
+import {
+  useHomeAssistantMqttAlarmEntitySettingsQuery,
+  useHomeAssistantMqttAlarmEntityStatusQuery,
+  usePublishHomeAssistantMqttAlarmEntityDiscoveryMutation,
+  useUpdateHomeAssistantMqttAlarmEntitySettingsMutation,
+} from '@/hooks/useHomeAssistantMqttAlarmEntity'
 import { useZwavejsSettingsQuery, useZwavejsStatusQuery } from '@/hooks/useZwavejs'
 import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
@@ -83,7 +89,10 @@ export function SettingsPage() {
   const updateMutation = useUpdateSettingsProfileMutation()
   const mqttStatusQuery = useMqttStatusQuery()
   const mqttSettingsQuery = useMqttSettingsQuery()
-  const mqttEntityQuery = useMqttAlarmEntityQuery()
+  const haMqttAlarmEntityQuery = useHomeAssistantMqttAlarmEntitySettingsQuery()
+  const haMqttAlarmEntityStatusQuery = useHomeAssistantMqttAlarmEntityStatusQuery()
+  const updateHaMqttAlarmEntityMutation = useUpdateHomeAssistantMqttAlarmEntitySettingsMutation()
+  const publishHaMqttDiscoveryMutation = usePublishHomeAssistantMqttAlarmEntityDiscoveryMutation()
   const zwavejsStatusQuery = useZwavejsStatusQuery()
   const zwavejsSettingsQuery = useZwavejsSettingsQuery()
 
@@ -99,11 +108,29 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [haNotifyServicePicker, setHaNotifyServicePicker] = useState('')
+  const [haMqttEntityDraft, setHaMqttEntityDraft] = useState<{
+    enabled: boolean
+    entityName: string
+    alsoRenameInHomeAssistant: boolean
+    haEntityId: string
+  } | null>(null)
 
   useEffect(() => {
     if (!initialDraft) return
     queueMicrotask(() => setDraft((prev) => prev ?? initialDraft))
   }, [initialDraft])
+
+  useEffect(() => {
+    if (!haMqttAlarmEntityQuery.data) return
+    setHaMqttEntityDraft((prev) =>
+      prev ?? {
+        enabled: haMqttAlarmEntityQuery.data.enabled,
+        entityName: haMqttAlarmEntityQuery.data.entityName || 'Latchpoint',
+        alsoRenameInHomeAssistant: haMqttAlarmEntityQuery.data.alsoRenameInHomeAssistant ?? true,
+        haEntityId: haMqttAlarmEntityQuery.data.haEntityId || 'alarm_control_panel.latchpoint_alarm',
+      }
+    )
+  }, [haMqttAlarmEntityQuery.data])
 
   const reset = () => {
     if (!initialDraft) return
@@ -168,6 +195,9 @@ export function SettingsPage() {
   }
 
   const loadError = getErrorMessage(settingsQuery.error) || null
+
+  const mqttReady = Boolean(mqttStatusQuery.data?.enabled && mqttSettingsQuery.data?.host)
+  const haMqttEntityStatus = haMqttAlarmEntityStatusQuery.data?.status ?? null
 
   return (
     <Page title="Settings">
@@ -553,8 +583,8 @@ export function SettingsPage() {
           </SectionCard>
 
           <SectionCard
-            title="Home Assistant (MQTT)"
-            description="Create and control the Home Assistant alarm entity via MQTT discovery."
+            title="MQTT"
+            description="Configure MQTT broker connection used by integrations (Home Assistant, Zigbee2MQTT, etc)."
           >
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -577,9 +607,6 @@ export function SettingsPage() {
                   ? `${mqttSettingsQuery.data.host}:${mqttSettingsQuery.data.port}`
                   : 'Not configured'}
               </div>
-              <div className="text-sm text-muted-foreground">
-                Alarm entity: {mqttEntityQuery.data?.enabled ? mqttEntityQuery.data.haEntityId : 'Disabled'}
-              </div>
 
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button type="button" variant="outline" onClick={() => navigate(Routes.SETUP_MQTT)} disabled={!isAdmin}>
@@ -591,7 +618,159 @@ export function SettingsPage() {
                   onClick={() => {
                     void mqttStatusQuery.refetch()
                     void mqttSettingsQuery.refetch()
-                    void mqttEntityQuery.refetch()
+                  }}
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Home Assistant: MQTT Alarm Entity"
+            description="Expose the alarm as an alarm_control_panel via Home Assistant MQTT discovery (requires MQTT enabled)."
+          >
+            {!mqttReady ? (
+              <Alert variant="warning">
+                <AlertDescription>
+                  Enable and configure MQTT first (Settings → MQTT). The Home Assistant MQTT alarm entity cannot be enabled
+                  without MQTT.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-sm font-medium">Enable alarm entity</div>
+                <Switch
+                  checked={haMqttEntityDraft?.enabled ?? false}
+                  onCheckedChange={(checked) =>
+                    setHaMqttEntityDraft((prev) => (prev ? { ...prev, enabled: checked } : prev))
+                  }
+                  disabled={!isAdmin || !mqttReady || updateHaMqttAlarmEntityMutation.isPending}
+                />
+              </div>
+
+              <FormField label="Entity name" htmlFor="haMqttEntityName" required>
+                <Input
+                  id="haMqttEntityName"
+                  value={haMqttEntityDraft?.entityName ?? ''}
+                  onChange={(e) => setHaMqttEntityDraft((prev) => (prev ? { ...prev, entityName: e.target.value } : prev))}
+                  disabled={
+                    !isAdmin ||
+                    !mqttReady ||
+                    updateHaMqttAlarmEntityMutation.isPending ||
+                    !(haMqttEntityDraft?.enabled ?? false)
+                  }
+                />
+              </FormField>
+
+              <FormField label="Home Assistant entity id" htmlFor="haMqttEntityId">
+                <Input
+                  id="haMqttEntityId"
+                  value={haMqttEntityDraft?.haEntityId ?? ''}
+                  onChange={(e) => setHaMqttEntityDraft((prev) => (prev ? { ...prev, haEntityId: e.target.value } : prev))}
+                  disabled={
+                    !isAdmin ||
+                    !mqttReady ||
+                    updateHaMqttAlarmEntityMutation.isPending ||
+                    !(haMqttEntityDraft?.enabled ?? false)
+                  }
+                />
+              </FormField>
+
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={haMqttEntityDraft?.alsoRenameInHomeAssistant ?? true}
+                  onChange={(e) =>
+                    setHaMqttEntityDraft((prev) =>
+                      prev ? { ...prev, alsoRenameInHomeAssistant: e.target.checked } : prev
+                    )
+                  }
+                  disabled={
+                    !isAdmin ||
+                    !mqttReady ||
+                    updateHaMqttAlarmEntityMutation.isPending ||
+                    !(haMqttEntityDraft?.enabled ?? false)
+                  }
+                />
+                Republishes discovery on rename
+              </label>
+
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Discovery:</span>
+                {haMqttEntityStatus?.lastDiscoveryPublishAt ? (
+                  <Pill className="text-emerald-600">Published</Pill>
+                ) : (
+                  <Pill className="text-muted-foreground">Not published</Pill>
+                )}
+                {haMqttEntityStatus?.lastDiscoveryPublishAt ? (
+                  <span className="text-muted-foreground">
+                    ({new Date(haMqttEntityStatus.lastDiscoveryPublishAt).toLocaleString()})
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    !isAdmin ||
+                    !mqttReady ||
+                    !haMqttEntityDraft ||
+                    updateHaMqttAlarmEntityMutation.isPending ||
+                    !(haMqttEntityDraft.enabled ?? false)
+                  }
+                  onClick={async () => {
+                    if (!haMqttEntityDraft) return
+                    setError(null)
+                    setNotice(null)
+                    try {
+                      await updateHaMqttAlarmEntityMutation.mutateAsync({
+                        enabled: haMqttEntityDraft.enabled,
+                        entityName: haMqttEntityDraft.entityName,
+                        haEntityId: haMqttEntityDraft.haEntityId,
+                        alsoRenameInHomeAssistant: haMqttEntityDraft.alsoRenameInHomeAssistant,
+                      })
+                      setNotice('Saved Home Assistant MQTT alarm entity settings.')
+                    } catch (err) {
+                      setError(getErrorMessage(err) || 'Failed to save Home Assistant MQTT alarm entity settings')
+                    }
+                  }}
+                >
+                  Save
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={
+                    !isAdmin ||
+                    !mqttReady ||
+                    publishHaMqttDiscoveryMutation.isPending ||
+                    !(haMqttEntityDraft?.enabled ?? false)
+                  }
+                  onClick={async () => {
+                    setError(null)
+                    setNotice(null)
+                    try {
+                      await publishHaMqttDiscoveryMutation.mutateAsync()
+                      setNotice('Published Home Assistant discovery config.')
+                    } catch (err) {
+                      setError(getErrorMessage(err) || 'Failed to publish discovery config')
+                    }
+                  }}
+                >
+                  Publish discovery
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    void haMqttAlarmEntityQuery.refetch()
+                    void haMqttAlarmEntityStatusQuery.refetch()
                   }}
                 >
                   Refresh

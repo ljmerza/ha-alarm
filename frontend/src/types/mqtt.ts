@@ -5,16 +5,6 @@ export interface MqttStatus {
   lastConnectAt: string | null
   lastDisconnectAt: string | null
   lastError: string | null
-  alarmEntity?: {
-    enabled: boolean
-    haEntityId: string | null
-    entityName: string | null
-    lastDiscoveryPublishAt: string | null
-    lastStatePublishAt: string | null
-    lastAvailabilityPublishAt: string | null
-    lastErrorAt: string | null
-    lastError: string | null
-  }
 }
 
 export interface MqttSettings {
@@ -53,18 +43,4 @@ export interface MqttTestConnectionRequest {
   clientId?: string
   keepaliveSeconds?: number
   connectTimeoutSeconds?: number
-}
-
-export interface HomeAssistantAlarmEntitySettings {
-  enabled: boolean
-  entityName: string
-  alsoRenameInHomeAssistant: boolean
-  haEntityId: string
-}
-
-export interface HomeAssistantAlarmEntitySettingsUpdate {
-  enabled?: boolean
-  entityName?: string
-  alsoRenameInHomeAssistant?: boolean
-  haEntityId?: string
 }

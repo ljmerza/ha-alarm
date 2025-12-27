@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { mqttService } from '@/services'
 import { queryKeys } from '@/types'
-import type { HomeAssistantAlarmEntitySettingsUpdate, MqttSettingsUpdate, MqttTestConnectionRequest } from '@/types'
+import type { MqttSettingsUpdate, MqttTestConnectionRequest } from '@/types'
 import { useAuthSessionQuery, useCurrentUserQuery } from '@/hooks/useAuthQueries'
 import { UserRole } from '@/lib/constants'
 
@@ -28,18 +28,6 @@ export function useMqttSettingsQuery() {
   })
 }
 
-export function useMqttAlarmEntityQuery() {
-  const session = useAuthSessionQuery()
-  const userQuery = useCurrentUserQuery()
-  const isAuthenticated = session.data?.isAuthenticated ?? false
-  const isAdmin = userQuery.data?.role === UserRole.ADMIN
-  return useQuery({
-    queryKey: queryKeys.mqtt.alarmEntity,
-    queryFn: mqttService.getAlarmEntitySettings,
-    enabled: isAuthenticated && isAdmin,
-  })
-}
-
 export function useUpdateMqttSettingsMutation() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -54,25 +42,5 @@ export function useUpdateMqttSettingsMutation() {
 export function useTestMqttConnectionMutation() {
   return useMutation({
     mutationFn: (payload: MqttTestConnectionRequest) => mqttService.testConnection(payload),
-  })
-}
-
-export function usePublishMqttDiscoveryMutation() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: () => mqttService.publishDiscovery(),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.mqtt.status })
-    },
-  })
-}
-
-export function useUpdateMqttAlarmEntityMutation() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (changes: HomeAssistantAlarmEntitySettingsUpdate) => mqttService.updateAlarmEntitySettings(changes),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.mqtt.alarmEntity })
-    },
   })
 }

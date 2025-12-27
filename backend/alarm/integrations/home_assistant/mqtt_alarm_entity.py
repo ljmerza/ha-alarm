@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
 import threading
+from dataclasses import dataclass
 
 from django.core.cache import cache
 from django.db import close_old_connections
@@ -11,39 +11,39 @@ from django.utils import timezone
 
 from accounts.use_cases import code_validation
 from alarm import services
+from alarm.integrations.home_assistant import mqtt_alarm_entity_status_store as status_store
 from alarm.models import AlarmState
 from alarm.mqtt.manager import MqttNotReachable, mqtt_connection_manager
-from alarm.mqtt import status_store
-from alarm.mqtt.constants import (
-    AVAILABILITY_TOPIC,
-    COMMAND_TOPIC,
-    DISCOVERY_TOPIC,
-    ERROR_TOPIC,
-    OBJECT_ID,
-    STATE_TOPIC,
-)
 from alarm.state_machine.settings import get_active_settings_profile, get_setting_bool, get_setting_json
 
 logger = logging.getLogger(__name__)
+
+OBJECT_ID = "latchpoint_alarm"
+
+DISCOVERY_TOPIC = f"homeassistant/alarm_control_panel/{OBJECT_ID}/config"
+STATE_TOPIC = f"{OBJECT_ID}/alarm/state"
+COMMAND_TOPIC = f"{OBJECT_ID}/alarm/command"
+AVAILABILITY_TOPIC = f"{OBJECT_ID}/alarm/availability"
+ERROR_TOPIC = f"{OBJECT_ID}/alarm/error"
 
 _init_lock = threading.Lock()
 _initialized = False
 
 
 @dataclass(frozen=True)
-class HaAlarmEntitySettings:
+class HomeAssistantMqttAlarmEntitySettings:
     enabled: bool
     entity_name: str
     also_rename_in_home_assistant: bool
     ha_entity_id: str
 
 
-def _get_entity_settings() -> HaAlarmEntitySettings:
+def _get_entity_settings() -> HomeAssistantMqttAlarmEntitySettings:
     profile = get_active_settings_profile()
     raw = get_setting_json(profile, "home_assistant_alarm_entity") or {}
     if not isinstance(raw, dict):
         raw = {}
-    return HaAlarmEntitySettings(
+    return HomeAssistantMqttAlarmEntitySettings(
         enabled=bool(raw.get("enabled", False)),
         entity_name=str(raw.get("entity_name") or "Latchpoint"),
         also_rename_in_home_assistant=bool(raw.get("also_rename_in_home_assistant", True)),
@@ -283,13 +283,12 @@ def handle_mqtt_alarm_command(*, topic: str, payload: str) -> None:
         services.record_code_used(user=user, code=code_obj, action="arm", metadata={"source": "mqtt", "target_state": target})
 
 
-def initialize_mqtt_alarm_integration() -> None:
+def initialize_home_assistant_mqtt_alarm_entity_integration() -> None:
     """
     Register subscriptions and on-connect hooks.
 
     Safe to call multiple times.
     """
-
     global _initialized
     with _init_lock:
         if _initialized:
@@ -306,3 +305,4 @@ def initialize_mqtt_alarm_integration() -> None:
 
     mqtt_connection_manager.subscribe(topic=COMMAND_TOPIC, qos=0, callback=handle_mqtt_alarm_command)
     mqtt_connection_manager.register_on_connect(_after_connect)
+

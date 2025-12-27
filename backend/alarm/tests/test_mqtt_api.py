@@ -7,14 +7,14 @@ from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import Role, User, UserCode, UserRoleAssignment
-from alarm.models import AlarmSettingsProfile, MqttIntegrationStatus
+from alarm.models import AlarmSettingsProfile, HomeAssistantMqttAlarmEntityStatus
 from alarm.tests.settings_test_utils import set_profile_settings
 
 
 class MqttApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="mqtt@example.com", password="pass")
-        role = Role.objects.create(slug="admin", name="Admin")
+        role, _ = Role.objects.get_or_create(slug="admin", defaults={"name": "Admin"})
         UserRoleAssignment.objects.create(user=self.user, role=role)
         self.client = APIClient()
         self.client.force_authenticate(self.user)
@@ -77,18 +77,18 @@ class MqttApiTests(APITestCase):
         self.assertEqual(response.data["has_password"], True)
 
     def test_publish_discovery_endpoint_calls_publish(self):
-        url = reverse("mqtt-publish-discovery")
-        with patch("alarm.mqtt.ha_alarm.mqtt_connection_manager.publish") as publish:
+        url = reverse("integrations-ha-mqtt-alarm-entity-publish-discovery")
+        with patch("alarm.integrations.home_assistant.mqtt_alarm_entity.mqtt_connection_manager.publish") as publish:
             response = self.client.post(url, data={}, format="json")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(publish.called)
 
     def test_publish_discovery_persists_status_timestamps(self):
-        url = reverse("mqtt-publish-discovery")
-        with patch("alarm.mqtt.ha_alarm.mqtt_connection_manager.publish"):
+        url = reverse("integrations-ha-mqtt-alarm-entity-publish-discovery")
+        with patch("alarm.integrations.home_assistant.mqtt_alarm_entity.mqtt_connection_manager.publish"):
             response = self.client.post(url, data={}, format="json")
         self.assertEqual(response.status_code, 200)
-        status = MqttIntegrationStatus.objects.filter(profile=self.profile).first()
+        status = HomeAssistantMqttAlarmEntityStatus.objects.filter(profile=self.profile).first()
         self.assertIsNotNone(status)
         assert status is not None
         self.assertIsNotNone(status.last_discovery_publish_at)
@@ -113,11 +113,11 @@ class MqttApiPermissionsTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_non_admin_cannot_publish_discovery(self):
-        url = reverse("mqtt-publish-discovery")
+        url = reverse("integrations-ha-mqtt-alarm-entity-publish-discovery")
         response = self.client.post(url, data={}, format="json")
         self.assertEqual(response.status_code, 403)
 
     def test_non_admin_cannot_update_alarm_entity_settings(self):
-        url = reverse("mqtt-alarm-entity")
+        url = reverse("integrations-ha-mqtt-alarm-entity")
         response = self.client.patch(url, data={"enabled": True}, format="json")
         self.assertEqual(response.status_code, 403)

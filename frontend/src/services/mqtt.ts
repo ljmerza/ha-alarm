@@ -1,7 +1,5 @@
 import api from './api'
 import type {
-  HomeAssistantAlarmEntitySettings,
-  HomeAssistantAlarmEntitySettingsUpdate,
   MqttSettings,
   MqttSettingsUpdate,
   MqttStatus,
@@ -23,20 +21,6 @@ export const mqttService = {
 
   async testConnection(payload: MqttTestConnectionRequest): Promise<{ ok: boolean }> {
     return api.post<{ ok: boolean }>('/api/alarm/mqtt/test/', payload)
-  },
-
-  async publishDiscovery(): Promise<{ ok: boolean }> {
-    return api.post<{ ok: boolean }>('/api/alarm/mqtt/publish-discovery/', {})
-  },
-
-  async getAlarmEntitySettings(): Promise<HomeAssistantAlarmEntitySettings> {
-    return api.get<HomeAssistantAlarmEntitySettings>('/api/alarm/mqtt/alarm-entity/')
-  },
-
-  async updateAlarmEntitySettings(
-    changes: HomeAssistantAlarmEntitySettingsUpdate
-  ): Promise<HomeAssistantAlarmEntitySettings> {
-    return api.patch<HomeAssistantAlarmEntitySettings>('/api/alarm/mqtt/alarm-entity/', changes)
   },
 }
 

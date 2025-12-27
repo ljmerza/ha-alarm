@@ -119,9 +119,9 @@ class AlarmSettingsEntry(models.Model):
         return f"{self.profile_id}:{self.key}"
 
 
-class MqttIntegrationStatus(models.Model):
+class HomeAssistantMqttAlarmEntityStatus(models.Model):
     """
-    Persisted status for MQTT + HA alarm entity publishing.
+    Persisted status for Home Assistant alarm entity publishing over MQTT discovery.
 
     This intentionally stores only timestamps and error summaries (no secrets).
     """
@@ -129,7 +129,7 @@ class MqttIntegrationStatus(models.Model):
     profile = models.OneToOneField(
         AlarmSettingsProfile,
         on_delete=models.CASCADE,
-        related_name="mqtt_status",
+        related_name="home_assistant_mqtt_alarm_entity_status",
     )
     last_discovery_publish_at = models.DateTimeField(null=True, blank=True)
     last_state_publish_at = models.DateTimeField(null=True, blank=True)
@@ -139,7 +139,7 @@ class MqttIntegrationStatus(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:  # pragma: no cover - simple representation
-        return f"{self.profile_id}:mqtt_status"
+        return f"{self.profile_id}:home_assistant_mqtt_alarm_entity_status"
 
 
 class Sensor(models.Model):

@@ -78,7 +78,7 @@ def transition(
         occurred_at_iso=now.isoformat(),
         user_id=getattr(user, "id", None),
     )
-    _schedule_mqtt_state_publish(state_to=state_to)
+    _schedule_integrations_alarm_state_change(state_to=state_to)
     return snapshot
 
 
@@ -112,7 +112,7 @@ def _schedule_home_assistant_notify(
     )
 
 
-def _schedule_mqtt_state_publish(*, state_to: str) -> None:
-    from alarm.mqtt.ha_alarm import publish_state
+def _schedule_integrations_alarm_state_change(*, state_to: str) -> None:
+    from alarm.integrations.dispatch import on_alarm_state_change_committed
 
-    transaction.on_commit(lambda: publish_state(state=state_to))
+    transaction.on_commit(lambda: on_alarm_state_change_committed(state_to=state_to))

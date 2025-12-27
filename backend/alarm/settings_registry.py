@@ -124,7 +124,7 @@ ALARM_PROFILE_SETTINGS: list[SettingDefinition] = [
             "keepalive_seconds": 30,
             "connect_timeout_seconds": 5,
         },
-        description="MQTT broker connection settings for Home Assistant MQTT discovery and commands.",
+        description="MQTT broker connection settings used by integrations (Home Assistant, Zigbee2MQTT, etc).",
     ),
     SettingDefinition(
         key="home_assistant_alarm_entity",

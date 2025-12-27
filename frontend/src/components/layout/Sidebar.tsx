@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Shield, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLayoutStore } from '@/stores/layoutStore'
 import { cn } from '@/lib/utils'
 import { Routes } from '@/lib/constants'
@@ -23,13 +23,13 @@ export function Sidebar() {
       <div className="flex items-center justify-between h-16 px-4 border-b border-border">
         {!sidebarCollapsed && (
           <Link to={Routes.HOME} className="flex items-center gap-2">
-            <Shield className="h-6 w-6 text-primary" />
-            <span className="font-semibold text-lg">Alarm</span>
+            <img src="/latchpoint_brand.png" alt="Latchpoint" className="h-8 w-8 object-contain" />
+            <span className="font-semibold text-lg">Latchpoint</span>
           </Link>
         )}
         {sidebarCollapsed && (
           <Link to={Routes.HOME} className="mx-auto">
-            <Shield className="h-6 w-6 text-primary" />
+            <img src="/latchpoint_brand.png" alt="Latchpoint" className="h-8 w-8 object-contain" />
           </Link>
         )}
       </div>

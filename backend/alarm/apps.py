@@ -24,14 +24,14 @@ class AlarmConfig(AppConfig):
 
         try:
             from alarm.gateways.mqtt import default_mqtt_gateway
-            from alarm.mqtt.ha_alarm import initialize_mqtt_alarm_integration
+            from alarm.integrations.dispatch import initialize_integrations
             from alarm.state_machine.settings import get_active_settings_profile, get_setting_json
             from alarm.mqtt.config import normalize_mqtt_connection, prepare_runtime_mqtt_connection
         except Exception:
             return
 
-        # Register subscriptions + on-connect hooks.
-        initialize_mqtt_alarm_integration()
+        # Register subscriptions + on-connect hooks for integrations.
+        initialize_integrations()
 
         # Best-effort: connect if configured.
         try:
